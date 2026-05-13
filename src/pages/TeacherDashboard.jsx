@@ -6,14 +6,15 @@ import '../styles/global.css';
  * Features:
  * - 401 Unauthorized Auto-Redirect
  * - Dynamic Programmes Dropdown
- * - Full CRUD for assignments & programmes
+ * - Full CRUD for assignments, programmes, and quizzes
  * - Student details modal (Real API)
- * - Removed: Subjects, Exams, and Quizzes logic
+ * - Unified Assignment/Quiz modal and timeline
  */
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? 'https://sams-backend-92kz.onrender.com/api';
 
 const EMPTY_FORM = {
+  itemType: 'assignment', // 'assignment' | 'quiz'
   name: '', 
   programme: '', 
   deadline: '', 
@@ -23,6 +24,7 @@ const EMPTY_FORM = {
 /* ── Helpers ────────────────────────────────────────────── */
 const fmtDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const daysLeft = (d) => {
+  if (!d) return { label: 'No date', color: '#94a3b8' };
   const diff = Math.ceil((new Date(d) - new Date()) / 86400000);
   if (diff < 0) return { label: 'Overdue',   color: '#ef4444' };
   if (diff === 0) return { label: 'Due today', color: '#f59e0b' };
@@ -34,6 +36,7 @@ const daysLeft = (d) => {
 const NAV = [
   { id: 'dashboard',   label: 'Dashboard',    icon: '🏠' },
   { id: 'assignments', label: 'Assignments',   icon: '📋' },
+  { id: 'quizzes',     label: 'Quizzes',       icon: '📝' },
   { id: 'programmes',  label: 'Programmes',    icon: '🏫' },
   { id: 'students',    label: 'Students',      icon: '🎓' },
 ];
@@ -44,6 +47,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   
   // Real API States
   const [assignments,  setAssignments]  = useState([]);
+  const [quizzes,      setQuizzes]      = useState([]);
   const [programmes,   setProgrammes]   = useState([]);
   const [isLoading,    setIsLoading]    = useState(true);
   const [apiError,     setApiError]     = useState('');
@@ -54,6 +58,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   const [formError,    setFormError]    = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // deleteConfirm is now an object: { id: number, type: 'assignment' | 'quiz' }
   const [deleteConfirm,setDeleteConfirm]= useState(null); 
   const [isDeleting,   setIsDeleting]   = useState(false);
   const [search,       setSearch]       = useState('');
@@ -70,23 +75,26 @@ export default function TeacherDashboard({ user, onLogout }) {
     setIsLoading(true);
     setApiError('');
     try {
-      const [assignRes, progRes] = await Promise.all([
+      const [assignRes, progRes, quizRes] = await Promise.all([
         fetch(`${API_BASE}/assignments/`, { headers: authHeaders }),
-        fetch(`${API_BASE}/programmes/`, { headers: authHeaders })
+        fetch(`${API_BASE}/programmes/`, { headers: authHeaders }),
+        fetch(`${API_BASE}/quizzes/`, { headers: authHeaders })
       ]);
 
-      if (assignRes.status === 401 || progRes.status === 401) {
+      if (assignRes.status === 401 || progRes.status === 401 || quizRes.status === 401) {
         onLogout(); 
         return;
       }
 
-      if (!assignRes.ok || !progRes.ok) throw new Error('Failed to fetch dashboard data');
+      if (!assignRes.ok || !progRes.ok || !quizRes.ok) throw new Error('Failed to fetch dashboard data');
 
       const assignData = await assignRes.json();
       const progData = await progRes.json();
+      const quizData = await quizRes.json();
 
       setAssignments(Array.isArray(assignData) ? assignData : (assignData.results || []));
       setProgrammes(Array.isArray(progData) ? progData : (progData.results || []));
+      setQuizzes(Array.isArray(quizData) ? quizData : (quizData.results || []));
     } catch (err) {
       setApiError(err.message);
     } finally {
@@ -99,21 +107,22 @@ export default function TeacherDashboard({ user, onLogout }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Modal helpers ── */
-  const openAdd = () => {
-    setForm(EMPTY_FORM);
+  const openAdd = (type = 'assignment') => {
+    setForm({ ...EMPTY_FORM, itemType: type });
     setEditTarget(null);
     setFormError('');
     setModalOpen(true);
   };
 
-  const openEdit = (a) => {
+  const openEdit = (item, type = 'assignment') => {
     setForm({ 
-      name: a.name || a.title || '', 
-      deadline: a.deadline ? a.deadline.split('T')[0] : '', 
-      description: a.description || '', 
-      programme: a.programme || '' 
+      itemType: type,
+      name: item.name || item.title || '', 
+      deadline: item.deadline ? item.deadline.split('T')[0] : '', 
+      description: item.description || '', 
+      programme: item.programme || '' 
     });
-    setEditTarget(a.id);
+    setEditTarget(item.id);
     setFormError('');
     setModalOpen(true);
   };
@@ -126,7 +135,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   };
 
   const validateForm = () => {
-    if (!form.name.trim())        return 'Assignment Name is required.';
+    if (!form.name.trim())        return `${form.itemType === 'quiz' ? 'Quiz' : 'Assignment'} Name is required.`;
     if (!form.programme)          return 'Programme is required.';
     if (!form.deadline)           return 'Deadline is required.';
     if (!form.description.trim()) return 'Description is required.';
@@ -140,12 +149,17 @@ export default function TeacherDashboard({ user, onLogout }) {
     setIsSubmitting(true);
     setFormError('');
 
-    const url = editTarget ? `${API_BASE}/assignments/${editTarget}/` : `${API_BASE}/assignments/`;
+    // Determine the base URL based on the selected item type
+    const baseUrl = form.itemType === 'quiz' ? `${API_BASE}/quizzes` : `${API_BASE}/assignments`;
+    const url = editTarget ? `${baseUrl}/${editTarget}/` : `${baseUrl}/`;
     const method = editTarget ? 'PATCH' : 'POST';
 
+    // Parse programme safely to an integer as required by Django ForeignKey
     const payload = {
-      ...form,
-      programme: form.programme ? parseInt(form.programme) : null
+      name: form.name,
+      deadline: form.deadline,
+      description: form.description,
+      programme: form.programme ? parseInt(form.programme, 10) : null
     };
 
     try {
@@ -171,18 +185,29 @@ export default function TeacherDashboard({ user, onLogout }) {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    
     setIsDeleting(true);
+    const { id, type } = deleteConfirm;
+    const baseUrl = type === 'quiz' ? `${API_BASE}/quizzes` : `${API_BASE}/assignments`;
+
     try {
-      const response = await fetch(`${API_BASE}/assignments/${id}/`, {
+      const response = await fetch(`${baseUrl}/${id}/`, {
         method: 'DELETE',
         headers: authHeaders,
       });
 
       if (response.status === 401) return onLogout();
-      if (!response.ok) throw new Error('Failed to delete assignment');
+      if (!response.ok) throw new Error(`Failed to delete ${type}`);
 
-      setAssignments((prev) => prev.filter((a) => a.id !== id));
+      // Optimistically remove from state
+      if (type === 'quiz') {
+        setQuizzes((prev) => prev.filter((q) => q.id !== id));
+      } else {
+        setAssignments((prev) => prev.filter((a) => a.id !== id));
+      }
+      
       setDeleteConfirm(null);
     } catch (error) {
       alert(error.message);
@@ -191,20 +216,27 @@ export default function TeacherDashboard({ user, onLogout }) {
     }
   };
 
-  /* ── Filtered list ── */
-  const filtered = assignments.filter((a) => {
-    const aName = a.name || a.title || '';
-    return aName.toLowerCase().includes(search.toLowerCase());
+  /* ── Filtered lists ── */
+  const filteredAssignments = assignments.filter((a) => {
+    const name = a.name || a.title || '';
+    return name.toLowerCase().includes(search.toLowerCase());
+  });
+
+  const filteredQuizzes = quizzes.filter((q) => {
+    const name = q.name || q.title || '';
+    return name.toLowerCase().includes(search.toLowerCase());
   });
 
   /* ── Stats ── */
   const stats = {
-    total: assignments.length,
+    totalAssignments: assignments.length,
+    totalQuizzes: quizzes.length,
   };
 
   const PAGE_TITLE = {
     dashboard:   { title: 'Dashboard',     sub: `Good day, ${user.name}! 👋` },
     assignments: { title: 'Assignments',   sub: 'Create and manage academic tasks' },
+    quizzes:     { title: 'Quizzes',       sub: 'Create and manage upcoming quizzes' },
     programmes:  { title: 'Programmes',    sub: 'Manage academic programmes' },
     students:    { title: 'Students',      sub: 'View enrolled students' },
   };
@@ -249,7 +281,8 @@ export default function TeacherDashboard({ user, onLogout }) {
             <h2>{title}</h2>
             <p>{sub}</p>
           </div>
-          {activePage === 'assignments' && <button className="btn btn-accent" onClick={openAdd}>+ New Assignment</button>}
+          {activePage === 'assignments' && <button className="btn btn-accent" onClick={() => openAdd('assignment')}>+ New Assignment</button>}
+          {activePage === 'quizzes' && <button className="btn btn-accent" onClick={() => openAdd('quiz')}>+ New Quiz</button>}
         </div>
 
         {apiError && (
@@ -259,8 +292,9 @@ export default function TeacherDashboard({ user, onLogout }) {
         )}
 
         <div className="page-body">
-          {activePage === 'dashboard'   && <TeacherDashboardPage stats={stats} assignments={assignments} programmes={programmes} setActivePage={setActivePage} openAdd={openAdd} isLoading={isLoading} />}
-          {activePage === 'assignments' && <AssignmentsPage assignments={filtered} programmes={programmes} search={search} setSearch={setSearch} openEdit={openEdit} setDeleteConfirm={setDeleteConfirm} openAdd={openAdd} isLoading={isLoading} />}
+          {activePage === 'dashboard'   && <TeacherDashboardPage stats={stats} assignments={assignments} quizzes={quizzes} programmes={programmes} setActivePage={setActivePage} openAdd={openAdd} isLoading={isLoading} />}
+          {activePage === 'assignments' && <TasksListPage type="assignment" items={filteredAssignments} programmes={programmes} search={search} setSearch={setSearch} openEdit={(item) => openEdit(item, 'assignment')} setDeleteConfirm={setDeleteConfirm} isLoading={isLoading} />}
+          {activePage === 'quizzes'     && <TasksListPage type="quiz" items={filteredQuizzes} programmes={programmes} search={search} setSearch={setSearch} openEdit={(item) => openEdit(item, 'quiz')} setDeleteConfirm={setDeleteConfirm} isLoading={isLoading} />}
           {activePage === 'programmes'  && <ProgrammesPage authHeaders={authHeaders} programmes={programmes} isLoading={isLoading} refreshData={fetchDashboardData} onLogout={onLogout} />}
           {activePage === 'students'    && <StudentsPage authHeaders={authHeaders} onLogout={onLogout} />}
         </div>
@@ -271,14 +305,34 @@ export default function TeacherDashboard({ user, onLogout }) {
         <div className="modal-overlay" onClick={closeModal}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">{editTarget ? '✏️ Edit Assignment' : '➕ New Assignment'}</h3>
+              <h3 className="modal-title">
+                {editTarget ? '✏️ Edit ' : '➕ New '} 
+                {form.itemType === 'quiz' ? 'Quiz' : 'Assignment'}
+              </h3>
               <button className="modal-close" onClick={closeModal}>✕</button>
             </div>
             <div className="modal-body">
               {formError && <div className="login-alert error">⚠️ {formError}</div>}
+              
+              {/* Type Toggle (Only editable when creating new) */}
+              <div className="form-group" style={{ display: editTarget ? 'none' : 'block' }}>
+                <div style={{ display: 'flex', gap: '10px', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
+                  <button 
+                    className={`btn w-full ${form.itemType === 'assignment' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setForm({...form, itemType: 'assignment'})}
+                    style={{ border: 'none' }}
+                  >📋 Assignment</button>
+                  <button 
+                    className={`btn w-full ${form.itemType === 'quiz' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setForm({...form, itemType: 'quiz'})}
+                    style={{ border: 'none' }}
+                  >📝 Quiz</button>
+                </div>
+              </div>
+
               <div className="form-group">
-                <label className="form-label">Assignment Name *</label>
-                <input className="form-input" name="name" placeholder="e.g. Physics Homework" value={form.name} onChange={handleFormChange} disabled={isSubmitting} />
+                <label className="form-label">{form.itemType === 'quiz' ? 'Quiz Name *' : 'Assignment Name *'}</label>
+                <input className="form-input" name="name" placeholder={`e.g. Physics ${form.itemType === 'quiz' ? 'Test' : 'Homework'}`} value={form.name} onChange={handleFormChange} disabled={isSubmitting} />
               </div>
               <div className="form-group">
                 <label className="form-label">Deadline *</label>
@@ -293,13 +347,13 @@ export default function TeacherDashboard({ user, onLogout }) {
               </div>
               <div className="form-group">
                 <label className="form-label">Description *</label>
-                <textarea className="form-textarea" name="description" placeholder="Assignment details..." value={form.description} onChange={handleFormChange} disabled={isSubmitting} />
+                <textarea className="form-textarea" name="description" placeholder={`${form.itemType === 'quiz' ? 'Quiz' : 'Assignment'} details...`} value={form.description} onChange={handleFormChange} disabled={isSubmitting} />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={closeModal} disabled={isSubmitting}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : (editTarget ? '💾 Save Changes' : '✅ Create Assignment')}
+                {isSubmitting ? 'Saving...' : (editTarget ? '💾 Save Changes' : `✅ Create ${form.itemType === 'quiz' ? 'Quiz' : 'Assignment'}`)}
               </button>
             </div>
           </div>
@@ -310,13 +364,13 @@ export default function TeacherDashboard({ user, onLogout }) {
       {deleteConfirm !== null && (
         <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
           <div className="modal" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header"><h3 className="modal-title">🗑️ Delete Assignment</h3></div>
+            <div className="modal-header"><h3 className="modal-title">🗑️ Delete {deleteConfirm.type === 'quiz' ? 'Quiz' : 'Assignment'}</h3></div>
             <div className="modal-body">
-              <p>Are you sure you want to delete <strong>"{assignments.find(a => a.id === deleteConfirm)?.name}"</strong>?</p>
+              <p>Are you sure you want to delete this {deleteConfirm.type}?</p>
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setDeleteConfirm(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={() => handleDelete(deleteConfirm)} disabled={isDeleting}>
+              <button className="btn btn-danger" onClick={handleDelete} disabled={isDeleting}>
                 {isDeleting ? 'Deleting...' : '🗑️ Delete'}
               </button>
             </div>
@@ -328,38 +382,53 @@ export default function TeacherDashboard({ user, onLogout }) {
 }
 
 /* ── Dashboard Page ── */
-function TeacherDashboardPage({ stats, assignments, programmes, setActivePage, openAdd, isLoading }) {
-  const upcoming = [...assignments].sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).slice(0, 5);
+function TeacherDashboardPage({ stats, assignments, quizzes, programmes, setActivePage, openAdd, isLoading }) {
+  // Combine both arrays, ensuring we don't break on missing deadlines
+  const allItems = [
+    ...assignments.map(a => ({ ...a, itemType: 'assignment' })),
+    ...quizzes.map(q => ({ ...q, itemType: 'quiz' }))
+  ].sort((a, b) => new Date(a.deadline || 0) - new Date(b.deadline || 0));
+
+  const upcoming = allItems.filter(item => new Date(item.deadline) >= new Date()).slice(0, 5);
+
   return (
     <>
-      <div className="stats-grid" style={{ gridTemplateColumns: '1fr' }}>
+      <div className="stats-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <div className="stat-card">
           <div className="stat-icon blue">📋</div>
-          <div><div className="stat-num">{stats.total}</div><div className="stat-label">Total Assignments Posted</div></div>
+          <div><div className="stat-num">{stats.totalAssignments}</div><div className="stat-label">Total Assignments</div></div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon info" style={{ background: 'var(--info-bg, #e0f2fe)' }}>📝</div>
+          <div><div className="stat-num">{stats.totalQuizzes}</div><div className="stat-label">Total Quizzes</div></div>
         </div>
       </div>
       <div className="grid-2">
         <div className="card">
           <div className="card-header">
             <span className="card-title">⏰ Upcoming Deadlines</span>
-            <button className="btn btn-outline btn-sm" onClick={() => setActivePage('assignments')}>View All</button>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
-            {isLoading ? <div className="empty-state">Loading...</div> : upcoming.length === 0 ? <div className="empty-state">No assignments posted.</div> : upcoming.map((a) => {
-              const dl = daysLeft(a.deadline);
-              const progName = programmes.find(p => p.id === a.programme)?.name || 'All Programmes';
+            {isLoading ? <div className="empty-state">Loading...</div> : upcoming.length === 0 ? <div className="empty-state">No upcoming deadlines.</div> : upcoming.map((item) => {
+              const dl = daysLeft(item.deadline);
+              const progName = programmes.find(p => p.id === item.programme)?.name || 'All Programmes';
+              const isQuiz = item.itemType === 'quiz';
+              
               return (
-                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9' }}>
-                  <span style={{ fontSize: '18px' }}>📌</span>
+                <div key={`${item.itemType}-${item.id}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: '18px' }}>{isQuiz ? '📝' : '📌'}</span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: '13px' }}>{a.name}</div>
+                    <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {item.name}
+                      <span className={`badge ${isQuiz ? 'badge-quiz' : 'badge-assign'}`} style={{ fontSize: '9px', padding: '2px 6px' }}>
+                        {isQuiz ? 'Quiz' : 'Assignment'}
+                      </span>
+                    </div>
                     <div style={{ fontSize: '11px', color: '#94a3b8' }}>{progName}</div>
-                    {/* Fixed: Show description summary */}
-                    <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>{a.description?.slice(0, 40)}...</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '12px', fontWeight: 700, color: dl.color }}>{dl.label}</div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{fmtDate(a.deadline)}</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{fmtDate(item.deadline)}</div>
                   </div>
                 </div>
               );
@@ -369,8 +438,8 @@ function TeacherDashboardPage({ stats, assignments, programmes, setActivePage, o
         <div className="card">
           <div className="card-header"><span className="card-title">⚡ Quick Actions</span></div>
           <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {[{ icon: '➕', label: 'Post New Assignment', action: openAdd },
-              { icon: '📋', label: 'Manage Assignments', action: () => setActivePage('assignments') },
+            {[{ icon: '➕', label: 'Post New Assignment', action: () => openAdd('assignment') },
+              { icon: '📝', label: 'Post New Quiz', action: () => openAdd('quiz') },
               { icon: '🏫', label: 'Manage Programmes', action: () => setActivePage('programmes') },
               { icon: '🎓', label: 'View Students', action: () => setActivePage('students') }
             ].map((qa) => (
@@ -385,12 +454,13 @@ function TeacherDashboardPage({ stats, assignments, programmes, setActivePage, o
   );
 }
 
-/* ── Assignments Page ── */
-function AssignmentsPage({ assignments, programmes, search, setSearch, openEdit, setDeleteConfirm, openAdd, isLoading }) {
+/* ── Generic Tasks List Page (Used for both Assignments and Quizzes) ── */
+function TasksListPage({ type, items, programmes, search, setSearch, openEdit, setDeleteConfirm, isLoading }) {
+  const isQuiz = type === 'quiz';
   return (
     <>
       <div style={{ marginBottom: '18px' }}>
-        <input className="form-input" placeholder="🔍 Search assignments…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input className="form-input" placeholder={`🔍 Search ${isQuiz ? 'quizzes' : 'assignments'}…`} value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
       <div className="card">
         <div className="table-wrap">
@@ -399,18 +469,26 @@ function AssignmentsPage({ assignments, programmes, search, setSearch, openEdit,
               <tr><th>Name</th><th>Deadline</th><th>Programme</th><th>Days Left</th><th style={{ textAlign: 'right' }}>Actions</th></tr>
             </thead>
             <tbody>
-              {isLoading ? <tr><td colSpan={5} className="empty-state">Loading assignments...</td></tr> : assignments.length === 0 ? <tr><td colSpan={5} className="empty-state">No assignments found.</td></tr> : assignments.map((a) => {
-                const dl = daysLeft(a.deadline);
-                const progName = programmes.find(p => p.id === a.programme)?.name || 'All Programmes';
+              {isLoading ? <tr><td colSpan={5} className="empty-state">Loading {isQuiz ? 'quizzes' : 'assignments'}...</td></tr> : items.length === 0 ? <tr><td colSpan={5} className="empty-state">No {isQuiz ? 'quizzes' : 'assignments'} found.</td></tr> : items.map((item) => {
+                const dl = daysLeft(item.deadline);
+                const progName = programmes.find(p => p.id === item.programme)?.name || 'All Programmes';
                 return (
-                  <tr key={a.id}>
-                    <td><div style={{ fontWeight: 700 }}>{a.name}</div><div style={{ fontSize: '12px', color: '#94a3b8' }}>{a.description?.slice(0, 50)}...</div></td>
-                    <td style={{ fontSize: '13px', fontWeight: 600 }}>{fmtDate(a.deadline)}</td>
+                  <tr key={item.id}>
+                    <td>
+                      <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {item.name}
+                        <span className={`badge ${isQuiz ? 'badge-quiz' : 'badge-assign'}`} style={{ fontSize: '9px', padding: '2px 6px' }}>
+                          {isQuiz ? 'Quiz' : 'Assignment'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#94a3b8' }}>{item.description?.slice(0, 50)}...</div>
+                    </td>
+                    <td style={{ fontSize: '13px', fontWeight: 600 }}>{fmtDate(item.deadline)}</td>
                     <td><span className="badge badge-todo">{progName}</span></td>
                     <td><span style={{ fontWeight: 700, color: dl.color, fontSize: '13px' }}>{dl.label}</span></td>
                     <td style={{ textAlign: 'right' }}>
-                      <button className="btn btn-outline btn-sm" onClick={() => openEdit(a)}>✏️ Edit</button>
-                      <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#991b1b', border: 'none', marginLeft: '6px' }} onClick={() => setDeleteConfirm(a.id)}>🗑️</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => openEdit(item)}>✏️ Edit</button>
+                      <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#991b1b', border: 'none', marginLeft: '6px' }} onClick={() => setDeleteConfirm({ id: item.id, type: type })}>🗑️</button>
                     </td>
                   </tr>
                 );
@@ -546,7 +624,6 @@ function ProgrammesPage({ authHeaders, programmes, isLoading, refreshData, onLog
               {isLoading ? <tr><td colSpan={3} className="empty-state">Loading...</td></tr> : programmes.map((p) => (
                 <tr key={p.id}>
                   <td style={{ fontWeight: 700 }}>{p.name}</td>
-                  {/* Fixed: Displays the description */}
                   <td>{p.description || 'No description'}</td>
                   <td style={{ textAlign: 'right' }}>
                     <button className="btn btn-outline btn-sm" onClick={() => openEdit(p)}>✏️ Edit</button>
