@@ -587,3 +587,132 @@ tbody tr:hover { background: #f8fafc; }
 .login-demo-box { margin-top: 20px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
 .login-demo-title { font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
 .login-demo-row { font-size: 12px; color: var(--text-mid); margin-bottom: 3px; display: flex; justify-content: space-between; }
+
+
+/* =========================================
+   📱 MOBILE RESPONSIVE DESIGN (NEW)
+   ========================================= */
+@media (max-width: 768px) {
+  
+  /* 1. Stack the app layout vertically */
+  .app-layout {
+    flex-direction: column;
+  }
+
+  /* 2. Refactor Sidebar for mobile (Relative top nav with horizontal scroll) */
+  .sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .sidebar-logo { 
+    padding: 16px; 
+  }
+
+  .sidebar-nav {
+    display: flex;
+    overflow-x: auto;
+    padding: 10px 16px;
+    gap: 10px;
+    /* Hide scrollbar for cleaner look on mobile */
+    scrollbar-width: none; 
+    -ms-overflow-style: none;
+  }
+  .sidebar-nav::-webkit-scrollbar { 
+    display: none; 
+  }
+
+  .nav-section-label { 
+    display: none; 
+  }
+
+  .nav-item { 
+    width: auto; 
+    white-space: nowrap; 
+    padding: 8px 12px; 
+    margin-bottom: 0;
+  }
+
+  .sidebar-footer { 
+    flex-direction: row; 
+    align-items: center; 
+    padding: 16px; 
+    flex-wrap: wrap; 
+    gap: 10px; 
+    justify-content: space-between;
+  }
+  
+  .user-card {
+    margin-bottom: 0;
+  }
+
+  .logout-btn { 
+    width: auto; 
+    margin-top: 0; 
+  }
+
+  /* 3. Make main content take full width */
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .topbar { 
+    padding: 0 16px; 
+  }
+  
+  .page-body { 
+    padding: 16px; 
+  }
+
+  /* 4. Fix grid layouts (stack into columns) */
+  .stats-grid { 
+    grid-template-columns: 1fr 1fr; /* 2x2 grid for stats on mobile */
+    gap: 12px;
+  }
+  
+  .grid-2, 
+  .grid-3, 
+  .form-row { 
+    grid-template-columns: 1fr; 
+  }
+
+  /* Extremely small screens */
+  @media (max-width: 480px) {
+    .stats-grid { 
+      grid-template-columns: 1fr; 
+    }
+  }
+
+  /* 5. Hide elements marked for desktop only */
+  .hide-mobile {
+    display: none !important;
+  }
+
+  /* 6. Fix Login Page for mobile */
+  .login-right { 
+    width: 100%; 
+    padding: 32px 20px; 
+  }
+  
+  .login-form-card { 
+    padding: 24px 20px; 
+    box-shadow: none; 
+    border: none; 
+    background: transparent; 
+  }
+
+  /* 7. Adjust Modals for smaller screens */
+  .modal-overlay { 
+    padding: 16px; 
+    align-items: flex-end; /* Slides modal slightly down to accommodate phone keyboards */
+  }
+  
+  .modal { 
+    max-height: 90vh; 
+    overflow-y: auto; 
+  }
+}
