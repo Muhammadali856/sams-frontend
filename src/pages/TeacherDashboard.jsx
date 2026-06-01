@@ -9,6 +9,7 @@ import '../styles/global.css';
  * - Full CRUD for assignments, subjects, and quizzes
  * - Student details modal (Real API)
  * - Unified Assignment/Quiz modal and timeline
+ * - Enrollment Key Security for Subjects
  */
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? 'https://sams-backend-92kz.onrender.com/api';
@@ -574,15 +575,15 @@ function StudentsPage({ authHeaders, onLogout }) {
 function SubjectsPage({ authHeaders, subjects, isLoading, refreshData, onLogout }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const [form, setForm] = useState({ name: '', description: '' });
+  const [form, setForm] = useState({ name: '', description: '', enrollment_key: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
-  const openAdd = () => { setForm({ name: '', description: '' }); setEditTarget(null); setModalOpen(true); };
-  const openEdit = (subj) => { setForm({ name: subj.name || '', description: subj.description || '' }); setEditTarget(subj.id); setModalOpen(true); };
+  const openAdd = () => { setForm({ name: '', description: '', enrollment_key: '' }); setEditTarget(null); setModalOpen(true); };
+  const openEdit = (subj) => { setForm({ name: subj.name || '', description: subj.description || '', enrollment_key: '' }); setEditTarget(subj.id); setModalOpen(true); };
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) return alert("Subject name is required.");
+    if (!form.name.trim() || !form.enrollment_key.trim()) return alert("Name and Enrollment Key are required.");
     setIsSubmitting(true);
     const url = editTarget ? `${API_BASE}/subjects/${editTarget}/` : `${API_BASE}/subjects/`;
     try {
@@ -611,7 +612,10 @@ function SubjectsPage({ authHeaders, subjects, isLoading, refreshData, onLogout 
   return (
     <>
       <div className="card">
-        <div className="card-header"><span className="card-title">🏫 Subjects</span> <button className="btn btn-accent btn-sm" onClick={openAdd}>+ New Subject</button></div>
+        <div className="card-header">
+          <span className="card-title">🏫 Subjects</span> 
+          <button className="btn btn-accent btn-sm" onClick={openAdd}>+ New Subject</button>
+        </div>
         <div className="table-wrap">
           <table>
             <thead><tr><th>Name</th><th>Description</th><th style={{ textAlign: 'right' }}>Actions</th></tr></thead>
@@ -635,8 +639,19 @@ function SubjectsPage({ authHeaders, subjects, isLoading, refreshData, onLogout 
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header"><h3 className="modal-title">{editTarget ? '✏️ Edit' : '➕ Add'} Subject</h3></div>
             <div className="modal-body">
-              <div className="form-group"><label className="form-label">Name *</label><input className="form-input" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} /></div>
-              <div className="form-group"><label className="form-label">Description</label><textarea className="form-textarea" value={form.description} onChange={(e) => setForm({...form, description: e.target.value})} /></div>
+              <div className="form-group">
+                <label className="form-label">Subject Name *</label>
+                <input className="form-input" placeholder="e.g. Artificial Intelligence" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Enrollment Key *</label>
+                <input className="form-input" placeholder="e.g. AI_SEC2_ALI" value={form.enrollment_key} onChange={(e) => setForm({...form, enrollment_key: e.target.value})} />
+                <span style={{fontSize: '11px', color: '#94a3b8'}}>Students will need this exact key to enroll. (Note: For security, existing keys are hidden when editing).</span>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Description</label>
+                <textarea className="form-textarea" value={form.description} onChange={(e) => setForm({...form, description: e.target.value})} />
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setModalOpen(false)}>Cancel</button>
@@ -649,8 +664,11 @@ function SubjectsPage({ authHeaders, subjects, isLoading, refreshData, onLogout 
         <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
           <div className="modal" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header"><h3 className="modal-title">🗑️ Delete Subject</h3></div>
-            <div className="modal-body"><p>Are you sure? This may affect student enrollments.</p></div>
-            <div className="modal-footer"><button className="btn btn-outline" onClick={() => setDeleteConfirm(null)}>Cancel</button><button className="btn btn-danger" onClick={() => handleDelete(deleteConfirm)}>🗑️ Delete</button></div>
+            <div className="modal-body"><p>Are you sure? This will remove the subject for all enrolled students.</p></div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={() => handleDelete(deleteConfirm)}>🗑️ Delete</button>
+            </div>
           </div>
         </div>
       )}
