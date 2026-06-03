@@ -14,6 +14,7 @@ export default function ProfileSettings({ user, authHeaders }) {
   const [enrollTarget, setEnrollTarget] = useState(null);
   const [enrollKey, setEnrollKey] = useState('');
   const [isEnrolling, setIsEnrolling] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
 
   const studentId = user?.studentId || 'UNKNOWN';
 
@@ -74,7 +75,7 @@ export default function ProfileSettings({ user, authHeaders }) {
   const enrolledIds = profileData?.subjects || [];
 
   return (
-    <div style={{ maxWidth: '800px' }}>
+    <div style={{ width: '100%', maxWidth: '1400px' }}>
       
       {/* Read-Only Profile Details */}
       <div className="card mb-6">
@@ -113,41 +114,67 @@ export default function ProfileSettings({ user, authHeaders }) {
         </div>
 
         <div className="card-body" style={{ padding: '12px' }}>
-          {allSubjects.length === 0 ? (
-            <div className="empty-state"><p>No subjects are currently open for registration.</p></div>
-          ) : (
-            allSubjects.map((subject) => {
+          {allSubjects.map(subject => {
               const isEnrolled = enrolledIds.includes(subject.id);
+              const isExpanded = expandedId === subject.id; // Check if this one is open
+
               return (
-                <div key={subject.id} className="assignment-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '8px', padding: '14px 16px' }}>
-                  <div style={{ flex: 1 }}>
+                <div key={subject.id} className="assignment-row" style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '8px', padding: '14px 16px' }}>
+                  
+                  {/* TOP ROW: Title & Buttons */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                     <div className="assignment-title" style={{ color: 'var(--text-dark)' }}>
                       {subject.name}
                     </div>
-                    {subject.description && (
-                      <div style={{ fontSize: '12px', color: 'var(--text-light)', marginTop: '2px' }}>
-                        {subject.description}
-                      </div>
-                    )}
+                    
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      {/* DETAILS BUTTON */}
+                      {subject.description && (
+                        <button 
+                          className="btn btn-outline btn-sm" 
+                          onClick={() => setExpandedId(isExpanded ? null : subject.id)}
+                          style={{ padding: '4px 10px', fontSize: '12px' }}
+                        >
+                          {isExpanded ? 'Hide Details' : '📄 Details'}
+                        </button>
+                      )}
+
+                      {/* ENROLL / STATUS BUTTON */}
+                      {isEnrolled ? (
+                        <span style={{ background: '#d1fae5', color: '#065f46', padding: '6px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 700 }}>
+                          ✅ Enrolled
+                        </span>
+                      ) : (
+                        <button 
+                          className="btn btn-outline btn-sm" 
+                          onClick={() => { setEnrollTarget(subject); setEnrollKey(''); setMsg(null); }}
+                          disabled={enrolledIds.length >= 6}
+                        >
+                          🔐 Enroll
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  
-                  {isEnrolled ? (
-                    <span style={{ background: '#d1fae5', color: '#065f46', padding: '6px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 700 }}>
-                      ✅ Enrolled
-                    </span>
-                  ) : (
-                    <button 
-                      className="btn btn-outline btn-sm" 
-                      onClick={() => { setEnrollTarget(subject); setEnrollKey(''); setMsg(null); }}
-                      disabled={enrolledIds.length >= 6}
-                    >
-                      🔐 Enroll
-                    </button>
+
+                  {/* BOTTOM ROW: Expandable Description */}
+                  {isExpanded && subject.description && (
+                    <div style={{ 
+                      fontSize: '13px', 
+                      color: 'var(--text-mid)', 
+                      background: '#f8fafc', 
+                      padding: '12px 14px', 
+                      borderRadius: '6px',
+                      borderLeft: '3px solid #3b82f6',
+                      marginTop: '4px'
+                    }}>
+                      {subject.description}
+                    </div>
                   )}
+
                 </div>
               );
             })
-          )}
+          }
         </div>
       </div>
 

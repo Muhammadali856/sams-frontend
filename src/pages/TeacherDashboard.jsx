@@ -537,7 +537,7 @@ function StudentsPage({ authHeaders, onLogout }) {
                   <td><span style={{ fontWeight: 700 }}>{s.user?.first_name || 'Unknown'}</span></td>
                   <td style={{ fontFamily: 'monospace' }}>{s.user?.username || 'N/A'}</td>
                   <td style={{ textAlign: 'center' }}>
-                    <button className="btn btn-outline btn-sm" onClick={() => setSelectedStudent(s)}>👁️ View</button>
+                    <button className="btn btn-outline btn-sm" onClick={() => setSelectedStudent(s)}>View</button>
                   </td>
                 </tr>
               ))}
@@ -564,7 +564,6 @@ function StudentsPage({ authHeaders, onLogout }) {
                   )) || <span style={{ color: '#94a3b8' }}>None</span>}
                 </div>
               </div>
-              <div><div className="form-label">Status</div><span className={`badge ${selectedStudent.is_active ? 'badge-done' : 'badge-todo'}`}>{selectedStudent.is_active ? 'Active' : 'Inactive'}</span></div>
             </div>
             <div className="modal-footer"><button className="btn btn-primary" onClick={() => setSelectedStudent(null)}>Close</button></div>
           </div>
