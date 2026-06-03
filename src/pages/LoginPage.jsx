@@ -136,7 +136,8 @@ export default function LoginPage({ onLoginSuccess }) {
           name: teacherUsername,
           token: data.access, 
           role: 'teacher',
-          user_id: data.user_id 
+          user_id: data.user_id,
+          is_head_teacher: data.is_head_teacher
         });
       } else {
         setError(data.detail || "Invalid teacher credentials.");
@@ -206,11 +207,11 @@ export default function LoginPage({ onLoginSuccess }) {
           {role === 'teacher' && step === 'login' && (
             <form onSubmit={handleTeacherLogin}>
               <div className="form-group">
-                <label className="form-label">Username / Email</label>
+                <label className="form-label">Teacher ID</label>
                 <input 
                   className="form-input" 
                   type="text" 
-                  placeholder="Enter teacher ID"
+                  placeholder="e.g. T12345"
                   value={teacherUsername} 
                   onChange={(e) => setTeacherUsername(e.target.value)} 
                   required 

@@ -33,15 +33,16 @@ const daysLeft = (d) => {
   return { label: `${diff}d left`, color: '#10b981' };
 };
 
-/* ── Sidebar nav ─────────────────────────────────────────── */
-const NAV = [
+/* ── Dynamic Sidebar nav ─────────────────────────────────────────── */
+const getNav = (isHeadTeacher) => [
   { id: 'dashboard',   label: 'Dashboard',    icon: '🏠' },
   { id: 'assignments', label: 'Assignments',  icon: '📋' },
   { id: 'quizzes',     label: 'Quizzes',      icon: '📝' },
   { id: 'subjects',    label: 'Subjects',     icon: '🏫' },
   { id: 'students',    label: 'Students',     icon: '🎓' },
-];
 
+  ...(isHeadTeacher ? [{ id: 'manage_staff', label: 'Manage Staff', icon: '👨‍🏫' }] : [])
+];
 /* ═══════════════════════════════════════════════════════════ */
 export default function TeacherDashboard({ user, onLogout }) {
   const [activePage,   setActivePage]   = useState('dashboard');
@@ -236,6 +237,7 @@ export default function TeacherDashboard({ user, onLogout }) {
     quizzes:     { title: 'Quizzes',       sub: 'Create and manage upcoming quizzes' },
     subjects:    { title: 'Subjects',      sub: 'Manage academic subjects' },
     students:    { title: 'Students',      sub: 'View enrolled students' },
+    manage_staff: { title: 'Manage Staff', sub: 'Register new teaching staff accounts' },
   };
   const { title, sub } = PAGE_TITLE[activePage];
 
@@ -252,7 +254,7 @@ export default function TeacherDashboard({ user, onLogout }) {
         </div>
         <nav className="sidebar-nav">
           <div className="nav-section-label">Menu</div>
-          {NAV.map((item) => (
+          {getNav(user.is_head_teacher).map((item) => (
             <button key={item.id} className={`nav-item ${activePage === item.id ? 'active' : ''}`} onClick={() => setActivePage(item.id)}>
               <span className="nav-icon">{item.icon}</span>
               {item.label}
@@ -294,6 +296,7 @@ export default function TeacherDashboard({ user, onLogout }) {
           {activePage === 'quizzes'     && <TasksListPage type="quiz" items={filteredQuizzes} subjects={subjects} search={search} setSearch={setSearch} openEdit={(item) => openEdit(item, 'quiz')} setDeleteConfirm={setDeleteConfirm} isLoading={isLoading} />}
           {activePage === 'subjects'    && <SubjectsPage authHeaders={authHeaders} subjects={subjects} isLoading={isLoading} refreshData={fetchDashboardData} onLogout={onLogout} />}
           {activePage === 'students'    && <StudentsPage authHeaders={authHeaders} onLogout={onLogout} />}
+          {activePage === 'manage_staff' && user.is_head_teacher && <ManageStaffPage authHeaders={authHeaders} onLogout={onLogout} />}
         </div>
       </div>
 
@@ -673,5 +676,95 @@ function SubjectsPage({ authHeaders, subjects, isLoading, refreshData, onLogout 
         </div>
       )}
     </>
+  );
+}
+
+/* ── Staff Management (Head Teachers Only) ── */
+function ManageStaffPage({ authHeaders, onLogout }) {
+  const [form, setForm] = useState({
+    username: '', password: '', first_name: '', last_name: '', email: ''
+  });
+  const [status, setStatus] = useState({ type: '', msg: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setStatus({ type: '', msg: '' });
+
+    try {
+      const response = await fetch(`${API_BASE}/teachers/create/`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(form)
+      });
+
+      if (response.status === 401) return onLogout();
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create teacher account.');
+      }
+
+      setStatus({ type: 'success', msg: data.message });
+      setForm({ username: '', password: '', first_name: '', last_name: '', email: '' }); // Reset form
+    } catch (err) {
+      setStatus({ type: 'error', msg: err.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ maxWidth: '600px' }}>
+      <div className="card-header">
+        <span className="card-title">👨‍🏫 Register New Teacher</span>
+      </div>
+      <div className="card-body">
+        <p style={{ fontSize: '13px', color: 'var(--text-light)', marginBottom: '20px' }}>
+          As a Head Teacher, you can create accounts for new teaching staff. They will be granted standard teacher privileges.
+        </p>
+
+        {status.msg && (
+          <div className={`login-alert ${status.type}`} style={{ marginBottom: '20px' }}>
+            {status.type === 'error' ? '⚠️ ' : '✅ '} {status.msg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">First Name</label>
+              <input className="form-input" required value={form.first_name} onChange={(e) => setForm({...form, first_name: e.target.value})} placeholder="e.g. Ahmad" />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Last Name</label>
+              <input className="form-input" required value={form.last_name} onChange={(e) => setForm({...form, last_name: e.target.value})} placeholder="e.g. Bin Ali" />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Email Address</label>
+            <input className="form-input" type="email" required value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} placeholder="teacher@school.edu" />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Teacher ID *</label>
+            <input className="form-input" required value={form.username} onChange={(e) => setForm({...form, username: e.target.value})} placeholder="e.g. T12345" />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Temporary Password *</label>
+            <input className="form-input" type="text" required value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} placeholder="Set a secure starting password" />
+          </div>
+
+          <div style={{ marginTop: '24px', textAlign: 'right' }}>
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Creating Account...' : '+ Create Teacher Account'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
