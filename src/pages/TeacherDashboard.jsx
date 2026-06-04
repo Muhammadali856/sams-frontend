@@ -67,6 +67,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   const [assignments,  setAssignments]  = useState([]);
   const [quizzes,      setQuizzes]      = useState([]);
   const [subjects,     setSubjects]     = useState([]);
+  const [students,     setStudents]     = useState([]);
   const [isLoading,    setIsLoading]    = useState(true);
   const [apiError,     setApiError]     = useState('');
 
@@ -92,26 +93,30 @@ export default function TeacherDashboard({ user, onLogout }) {
     setIsLoading(true);
     setApiError('');
     try {
-      const [assignRes, subjRes, quizRes] = await Promise.all([
+      // FIXED: Added studentRes to the destructuring array
+      const [assignRes, subjRes, quizRes, studentRes] = await Promise.all([
         fetch(`${API_BASE}/assignments/`, { headers: authHeaders }),
         fetch(`${API_BASE}/subjects/`, { headers: authHeaders }),
-        fetch(`${API_BASE}/quizzes/`, { headers: authHeaders })
+        fetch(`${API_BASE}/quizzes/`, { headers: authHeaders }),
+        fetch(`${API_BASE}/students/`, { headers: authHeaders })
       ]);
 
-      if (assignRes.status === 401 || subjRes.status === 401 || quizRes.status === 401) {
+      if (assignRes.status === 401 || subjRes.status === 401 || quizRes.status === 401 || studentRes.status === 401) {
         onLogout(); 
         return;
       }
 
-      if (!assignRes.ok || !subjRes.ok || !quizRes.ok) throw new Error('Failed to fetch dashboard data');
+      if (!assignRes.ok || !subjRes.ok || !quizRes.ok || !studentRes.ok) throw new Error('Failed to fetch dashboard data');
 
       const assignData = await assignRes.json();
       const subjData = await subjRes.json();
       const quizData = await quizRes.json();
+      const studentData = await studentRes.json();
 
       setAssignments(Array.isArray(assignData) ? assignData : (assignData.results || []));
       setSubjects(Array.isArray(subjData) ? subjData : (subjData.results || []));
       setQuizzes(Array.isArray(quizData) ? quizData : (quizData.results || []));
+      setStudents(Array.isArray(studentData) ? studentData : (studentData.results || []));
     } catch (err) {
       setApiError(err.message);
     } finally {
@@ -283,7 +288,7 @@ export default function TeacherDashboard({ user, onLogout }) {
           ))}
         </nav>
         <div className="sidebar-footer">
-          {/* --- NEW: Theme Toggle Button --- */}
+          {/* Theme Toggle Button */}
           <button 
             onClick={() => setIsDarkMode(!isDarkMode)} 
             className="btn btn-outline w-full" 
@@ -325,7 +330,7 @@ export default function TeacherDashboard({ user, onLogout }) {
           {activePage === 'assignments' && <TasksListPage type="assignment" items={filteredAssignments} subjects={subjects} search={search} setSearch={setSearch} openEdit={(item) => openEdit(item, 'assignment')} setDeleteConfirm={setDeleteConfirm} isLoading={isLoading} />}
           {activePage === 'quizzes'     && <TasksListPage type="quiz" items={filteredQuizzes} subjects={subjects} search={search} setSearch={setSearch} openEdit={(item) => openEdit(item, 'quiz')} setDeleteConfirm={setDeleteConfirm} isLoading={isLoading} />}
           {activePage === 'subjects'    && <SubjectsPage authHeaders={authHeaders} subjects={subjects} isLoading={isLoading} refreshData={fetchDashboardData} onLogout={onLogout} />}
-          {activePage === 'students'    && <StudentsPage authHeaders={authHeaders} onLogout={onLogout} />}
+          {activePage === 'students'    && <StudentsPage students={students} isLoading={isLoading} />}
           {activePage === 'manage_staff' && user.is_head_teacher && <ManageStaffPage authHeaders={authHeaders} onLogout={onLogout} />}
         </div>
       </div>
@@ -531,37 +536,24 @@ function TasksListPage({ type, items, subjects, search, setSearch, openEdit, set
 }
 
 /* ── Students Management ── */
-function StudentsPage({ authHeaders, onLogout }) {
-  const [students, setStudents] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [apiError, setApiError] = useState('');
+function StudentsPage({ students, isLoading }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
-
-  useEffect(() => {
-    fetch(`${API_BASE}/students/`, { headers: authHeaders })
-      .then(async (res) => {
-        if (res.status === 401) return onLogout();
-        if (!res.ok) {
-           const errorData = await res.json().catch(() => ({}));
-           throw new Error(errorData.detail || errorData.message || `HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        setStudents(Array.isArray(data) ? data : (data.results || []));
-      })
-      .catch((err) => setApiError(err.message))
-      .finally(() => setIsLoading(false));
-  }, []);
 
   return (
     <>
       <div className="card">
-        <div className="card-header"><span className="card-title">🎓 Enrolled Students</span> <span className="badge badge-todo">{students.length} students</span></div>
-        {apiError && <div style={{ padding: '15px', color: '#991b1b' }}>⚠️ Error: {apiError}</div>}
+        <div className="card-header">
+          <span className="card-title">🎓 Enrolled Students</span> 
+          <span className="badge badge-todo">{students.length} students</span>
+        </div>
+        
         <div className="table-wrap">
           <table>
             <thead><tr><th>#</th><th>First Name</th><th>Student ID</th><th style={{ textAlign: 'center' }}>Details</th></tr></thead>
             <tbody>
-              {isLoading ? <tr><td colSpan={4} className="empty-state">Loading...</td></tr> : students.map((s, i) => (
+              {isLoading ? <tr><td colSpan={4} className="empty-state">Loading students...</td></tr> : 
+               students.length === 0 ? <tr><td colSpan={4} className="empty-state">No students found.</td></tr> :
+               students.map((s, i) => (
                 <tr key={s.id}>
                   <td style={{ color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
                   <td><span style={{ fontWeight: 700 }}>{s.user?.first_name || 'Unknown'}</span></td>
@@ -575,6 +567,8 @@ function StudentsPage({ authHeaders, onLogout }) {
           </table>
         </div>
       </div>
+      
+      {/* Student Details Modal */}
       {selectedStudent && (
         <div className="modal-overlay" onClick={() => setSelectedStudent(null)}>
           <div className="modal" style={{ maxWidth: '450px' }} onClick={(e) => e.stopPropagation()}>
