@@ -5,11 +5,11 @@ const API_BASE = import.meta.env?.VITE_API_BASE ?? 'https://sams-backend-92kz.on
 
 export default function LoginPage({ onLoginSuccess }) {
   const [role, setRole] = useState('student');
-  const [step, setStep] = useState('login');
+  const [step, setStep] = useState('login'); // 'login', 'changePassword', 'forgot_request', 'forgot_verify', 'forgot_confirm'
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  // NEW: State to track if it's their first time
   const [isFirstTime, setIsFirstTime] = useState(false);
 
   const [fullName, setFullName] = useState('');
@@ -22,12 +22,15 @@ export default function LoginPage({ onLoginSuccess }) {
   const [teacherUsername, setTeacherUsername] = useState('');
   const [teacherPassword, setTeacherPassword] = useState('');
 
+  // --- OTP Flow States ---
+  const [resetStudentId, setResetStudentId] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+
   const handleStudentLogin = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    // Only send the full name if they are in "First Time" mode
     const payload = {
       student_id: studentId.toUpperCase(), 
       password: studentPassword 
@@ -49,12 +52,11 @@ export default function LoginPage({ onLoginSuccess }) {
         localStorage.setItem('access_token', data.access);
         setTempUserId(data.user_id); 
 
-        // Backend will tell us if they need to change password (which triggers for first-timers)
         if (data.require_password_change) {
            setStep('changePassword'); 
         } else {
            onLoginSuccess({ 
-             name: data.username, // Using the backend's username as fallback
+             name: data.username,
              token: data.access, 
              role: 'student',
              studentId: payload.student_id,
@@ -62,14 +64,12 @@ export default function LoginPage({ onLoginSuccess }) {
            }); 
         }
       } else {
-        // Smart UX: If they forgot to click "First time", do it for them automatically!
         if (data.first_time_required) {
           setIsFirstTime(true);
         }
         setError(data.detail || "Invalid student credentials.");
       }
     } catch (error) {
-      console.error("🚨 THE REAL ERROR IS:", error); 
       setError("Network error. Please try again.");
     } finally {
       setIsLoading(false);
@@ -149,6 +149,88 @@ export default function LoginPage({ onLoginSuccess }) {
     }
   };
 
+  // ==========================================
+  // OTP FORGOT PASSWORD FLOW API HANDLERS
+  // ==========================================
+  const handleRequestOTP = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccessMsg(''); setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/forgot-password/request/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: resetStudentId }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMsg(data.message || "We sent a 6-digit code to your email!");
+        setStep('forgot_verify');
+      } else {
+        setError(data.error || "Failed to send verification code.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccessMsg(''); setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/forgot-password/verify/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: resetStudentId, otp_code: otpCode }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMsg("Code verified! Please set your new password.");
+        setStep('forgot_confirm');
+      } else {
+        setError(data.error || "Invalid code.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfirmReset = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccessMsg(''); setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/forgot-password/confirm/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          student_id: resetStudentId, 
+          otp_code: otpCode, 
+          new_password: newPassword 
+        }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        alert("Your password has been reset successfully! You can now log in.");
+        setStep('login');
+        setStudentPassword('');
+        setNewPassword('');
+        setOtpCode('');
+      } else {
+        setError(data.error || "Failed to reset password.");
+      }
+    } catch {
+      setError("Network error.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="login-page">
       <div className="login-left hide-mobile">
@@ -181,7 +263,7 @@ export default function LoginPage({ onLoginSuccess }) {
             <p className="login-form-sub">
               {step === 'changePassword' 
                 ? 'For security, please set a new password for your account before entering the dashboard.'
-                : 'Enter your details to continue.'}
+                : step.includes('forgot') ? '' : 'Enter your details to continue.'}
             </p>
           </div>
 
@@ -204,6 +286,9 @@ export default function LoginPage({ onLoginSuccess }) {
             </div>
           )}
 
+          {/* ==============================================
+              TEACHER LOGIN
+              ============================================== */}
           {role === 'teacher' && step === 'login' && (
             <form onSubmit={handleTeacherLogin}>
               <div className="form-group">
@@ -236,10 +321,12 @@ export default function LoginPage({ onLoginSuccess }) {
             </form>
           )}
 
+          {/* ==============================================
+              STUDENT LOGIN
+              ============================================== */}
           {role === 'student' && step === 'login' && (
             <form onSubmit={handleStudentLogin}>
               
-              {/* Only show Full Name if it is their first time */}
               {isFirstTime && (
                 <div className="form-group">
                   <label className="form-label">Full Name</label>
@@ -297,32 +384,58 @@ export default function LoginPage({ onLoginSuccess }) {
                 {isLoading ? 'Logging in...' : (isFirstTime ? 'Verify Identity' : 'Log In')}
               </button>
 
-              {/* The First Time Button Toggle */}
+              {/* Side-by-side Navigation Links */}
               {!isFirstTime && (
-                <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '18px' }}>
                   <button 
                     type="button" 
                     onClick={() => { setIsFirstTime(true); setError(''); }}
-                    style={{ background: 'none', border: 'none', color: '#1e40af', textDecoration: 'underline', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
+                    style={{ background: 'none', border: 'none', color: '#1e40af', textDecoration: 'underline', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
                   >
-                    First time logging in?
+                    First time ?
+                  </button>
+                  <span style={{ color: '#cbd5e1' }}>|</span>
+                  <button 
+                    type="button" 
+                    onClick={() => { setStep('forgot_request'); setError(''); setSuccessMsg(''); setResetStudentId(studentId); }}
+                    style={{ background: 'none', border: 'none', color: '#64748b', textDecoration: 'underline', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
+                  >
+                    Forgot password ?
                   </button>
                 </div>
               )}
+
+              {/* Back button for First Time view */}
               {isFirstTime && (
                 <div style={{ textAlign: 'center', marginTop: '16px' }}>
                   <button 
                     type="button" 
                     onClick={() => { setIsFirstTime(false); setError(''); }}
-                    style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '13px' }}
+                    style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
                   >
                     ← Back to standard login
                   </button>
                 </div>
               )}
+
+              {/* First Time Tips Panel */}
+              {isFirstTime && (
+                <div style={{ background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '8px', padding: '14px', marginTop: '20px', fontSize: '13px', color: 'var(--text-mid)' }}>
+                   <strong style={{ color: 'var(--primary)', display: 'block', marginBottom: '8px' }}>💡 First Time Login Guide:</strong>
+                   <ul style={{ paddingLeft: '18px', margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                     <li>Enter your <strong>Full Name</strong> exactly as registered in the university system.</li>
+                     <li>Enter your <strong>Student ID</strong> (e.g., S123456).</li>
+                     <li>Use the <strong>default password</strong> provided by the administration.</li>
+                     <li>You will be prompted to create a new secure password immediately.</li>
+                   </ul>
+                </div>
+              )}
             </form>
           )}
 
+          {/* ==============================================
+              FIRST TIME PASSWORD CHANGE
+              ============================================== */}
           {role === 'student' && step === 'changePassword' && (
             <form onSubmit={handleChangePasswordSubmit}>
               <div className="form-group">
@@ -339,6 +452,75 @@ export default function LoginPage({ onLoginSuccess }) {
 
               <button type="submit" className="btn btn-primary w-full" disabled={isLoading}>
                 {isLoading ? 'Saving...' : 'Save Password & Enter'}
+              </button>
+            </form>
+          )}
+
+          {/* ==============================================
+              FORGOT PASSWORD FLOW
+              ============================================== */}
+          
+          {/* STEP 1: REQUEST CODE */}
+          {step === 'forgot_request' && (
+            <form onSubmit={handleRequestOTP}>
+              <div className="login-form-head">
+                <h2 className="login-form-h2">Account Recovery</h2>
+                <p className="login-form-sub">Enter your Student ID to receive a 6-digit recovery code via email.</p>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Student ID</label>
+                <input className="form-input" type="text" placeholder="e.g. S123456" value={resetStudentId} onChange={(e) => setResetStudentId(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn btn-primary w-full" disabled={isLoading}>
+                {isLoading ? 'Sending...' : 'Send Recovery Code'}
+              </button>
+              <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                <button type="button" onClick={() => setStep('login')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+                  ← Back to login
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* STEP 2: VERIFY CODE */}
+          {step === 'forgot_verify' && (
+            <form onSubmit={handleVerifyOTP}>
+              <div className="login-form-head">
+                <h2 className="login-form-h2">Check Your Email</h2>
+                <p className="login-form-sub">We sent a 6-digit verification code to your Outlook account.</p>
+              </div>
+              {successMsg && <div className="login-alert success">✅ {successMsg}</div>}
+              
+              <div className="form-group">
+                <label className="form-label">6-Digit Code</label>
+                <input className="form-input" type="text" placeholder="e.g. 123456" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn btn-primary w-full" disabled={isLoading}>
+                {isLoading ? 'Verifying...' : 'Verify Code'}
+              </button>
+              <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                <button type="button" onClick={() => { setStep('forgot_request'); setSuccessMsg(''); setError(''); }} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+                  ← Try a different Student ID
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* STEP 3: CONFIRM NEW PASSWORD */}
+          {step === 'forgot_confirm' && (
+            <form onSubmit={handleConfirmReset}>
+              <div className="login-form-head">
+                <h2 className="login-form-h2">Create New Password</h2>
+                <p className="login-form-sub">Your code was verified. Please set a new secure password.</p>
+              </div>
+              {successMsg && <div className="login-alert success">✅ {successMsg}</div>}
+              
+              <div className="form-group">
+                <label className="form-label">New Password</label>
+                <input className="form-input" type="password" placeholder="Min. 8 characters" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn btn-primary w-full" disabled={isLoading}>
+                {isLoading ? 'Saving...' : 'Reset Password'}
               </button>
             </form>
           )}
