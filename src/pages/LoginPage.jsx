@@ -231,7 +231,7 @@ export default function LoginPage({ onLoginSuccess }) {
               </div>
 
               <button type="submit" className="btn btn-primary w-full" disabled={isLoading}>
-                {isLoading ? 'Logging in...' : 'Teacher Log In'}
+                {isLoading ? 'Logging in...' : 'Log In'}
               </button>
             </form>
           )}
@@ -294,7 +294,7 @@ export default function LoginPage({ onLoginSuccess }) {
               </div>
 
               <button type="submit" className="btn btn-primary w-full" disabled={isLoading}>
-                {isLoading ? 'Logging in...' : (isFirstTime ? 'Verify Identity' : 'Student Log In')}
+                {isLoading ? 'Logging in...' : (isFirstTime ? 'Verify Identity' : 'Log In')}
               </button>
 
               {/* The First Time Button Toggle */}

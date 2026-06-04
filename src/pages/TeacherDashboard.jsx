@@ -47,6 +47,22 @@ const getNav = (isHeadTeacher) => [
 export default function TeacherDashboard({ user, onLogout }) {
   const [activePage,   setActivePage]   = useState('dashboard');
   
+  // --- NEW: Dark Mode State ---
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark';
+  });
+
+  // --- NEW: Theme Toggle Logic ---
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.add('dark-mode');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.body.classList.remove('dark-mode');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
   // Real API States
   const [assignments,  setAssignments]  = useState([]);
   const [quizzes,      setQuizzes]      = useState([]);
@@ -245,7 +261,12 @@ export default function TeacherDashboard({ user, onLogout }) {
     <div className="app-layout">
       {/* Sidebar */}
       <aside className="sidebar">
-        <div className="sidebar-logo">
+        <div 
+          className="sidebar-logo" 
+          onClick={() => setActivePage('dashboard')} 
+          style={{ cursor: 'pointer' }}
+          title="Go to Dashboard"
+        >
           <div className="logo-icon">📚</div>
           <div>
             <div className="logo-text">SAMS</div>
@@ -262,6 +283,15 @@ export default function TeacherDashboard({ user, onLogout }) {
           ))}
         </nav>
         <div className="sidebar-footer">
+          {/* --- NEW: Theme Toggle Button --- */}
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)} 
+            className="btn btn-outline w-full" 
+            style={{ marginBottom: '12px' }}
+          >
+            {isDarkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
+          </button>
+
           <div className="user-card">
             <div className="user-avatar" style={{ background: '#10b981' }}>{user.name[0]}</div>
             <div>

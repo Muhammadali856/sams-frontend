@@ -28,12 +28,7 @@ export default function DeadlinesPage({ items, expanded, toggleExpand, loading, 
 
   return (
     <>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: '10px',
-        background: '#eff6ff', border: '1px solid #bfdbfe',
-        borderRadius: '10px', padding: '10px 16px',
-        marginBottom: '16px', fontSize: '13px', color: '#1e40af',
-      }}>
+      <div className="info-banner">
         <span>ℹ️</span>
         <span>
           These academic deadlines are set by your teacher and are <strong>read-only</strong>.

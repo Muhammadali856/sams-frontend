@@ -8,7 +8,33 @@ export default function PomodoroPage() {
   const [running,  setRunning]  = useState(false);
   const [mode,     setMode]     = useState('work');
   const [sessions, setSessions] = useState(0);
+  
+  // NEW: State to track fullscreen status accurately
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
   const intervalRef = useRef(null);
+  const containerRef = useRef(null); 
+
+  // Listen for fullscreen changes (handles both button clicks and the 'Esc' key)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (running) {
+        e.preventDefault();
+        e.returnValue = "Timeringiz ishlab turibdi! Saytdan chiqib ketishni xohlaysizmi?";
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [running]);
 
   const total = mode === 'work' ? WORK_SEC : BREAK_SEC;
   const pct   = seconds / total;
@@ -39,34 +65,77 @@ export default function PomodoroPage() {
     return () => clearInterval(intervalRef.current);
   }, [running, mode]);
 
-  const toggle     = () => setRunning((r) => !r);
-  const reset      = () => { setRunning(false); clearInterval(intervalRef.current); setSeconds(mode === 'work' ? WORK_SEC : BREAK_SEC); };
-  const switchMode = (m) => { setRunning(false); clearInterval(intervalRef.current); setMode(m); setSeconds(m === 'work' ? WORK_SEC : BREAK_SEC); };
+  const toggle = () => setRunning((r) => !r);
+  
+  const handleReset = () => {
+    const confirmReset = window.confirm("Rostdan ham timerni boshidan boshlamoqchimisiz?");
+    if (confirmReset) {
+      setRunning(false); 
+      clearInterval(intervalRef.current); 
+      setSeconds(mode === 'work' ? WORK_SEC : BREAK_SEC);
+    }
+  };
+
+  const switchMode = (m) => { 
+    setRunning(false); 
+    clearInterval(intervalRef.current); 
+    setMode(m); 
+    setSeconds(m === 'work' ? WORK_SEC : BREAK_SEC); 
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().catch(err => {
+        alert(`Fullscreen xatosi: ${err.message}`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
 
   const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
   const ss = String(seconds % 60).padStart(2, '0');
 
   return (
-    <div style={{ maxWidth: '480px', margin: '0 auto' }}>
-      <div className="card" style={{ padding: '32px', textAlign: 'center' }}>
+    <div ref={containerRef} style={{ 
+      maxWidth: isFullscreen ? '100%' : '480px', 
+      margin: '0 auto', 
+      // FIXED: Changed '--bg-main' to '--bg' to respect the global.css dark mode variable
+      background: isFullscreen ? 'var(--bg)' : 'transparent', 
+      height: isFullscreen ? '100vh' : 'auto', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      justifyContent: 'center' 
+    }}>
+      
+      <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', padding: isFullscreen ? '20px' : '0 0 10px 0' }}>
+        <button className="btn btn-outline btn-sm" onClick={toggleFullscreen}>
+          {isFullscreen ? '⛶ Quit Fullscreen' : '⛶ Fullscreen'}
+        </button>
+      </div>
+
+      <div className="card" style={{ padding: '32px', textAlign: 'center', width: '100%', maxWidth: '480px' }}>
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '28px' }}>
           <button className={`btn btn-sm ${mode === 'work'  ? 'btn-primary' : 'btn-outline'}`} onClick={() => switchMode('work')}>🎯 Work (25m)</button>
           <button className={`btn btn-sm ${mode === 'break' ? 'btn-accent'  : 'btn-outline'}`} onClick={() => switchMode('break')}>☕ Break (5m)</button>
         </div>
 
-        <div className={`pomodoro-ring ring-${mode}`} style={{ position: 'relative', width: 220, height: 220 }}>
+        <div className={`pomodoro-ring ring-${mode}`} style={{ position: 'relative', width: 220, height: 220, margin: '0 auto' }}>
           <svg className="ring-svg" width="220" height="220" viewBox="0 0 220 220">
             <circle className="ring-bg"       cx="110" cy="110" r={r} />
             <circle className="ring-progress" cx="110" cy="110" r={r} strokeDasharray={`${dash} ${circ}`} strokeDashoffset={0} />
           </svg>
           <div className="timer-display" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <div className="timer-time">{mm}:{ss}</div>
+            <div className="timer-time" style={{ fontSize: '48px', fontWeight: 'bold' }}>{mm}:{ss}</div>
             <div className="timer-mode">{mode === 'work' ? 'Focus' : 'Break'}</div>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '24px' }}>
-          <button className="btn btn-outline" onClick={reset}>↺ Reset</button>
+          <button className="btn btn-outline" onClick={handleReset}>↺ Reset</button>
           <button className={`btn ${running ? 'btn-danger' : 'btn-primary'}`} style={{ minWidth: '100px' }} onClick={toggle}>
             {running ? '⏸ Pause' : '▶ Start'}
           </button>
@@ -83,20 +152,8 @@ export default function PomodoroPage() {
               }}>{i <= sessions ? '🍅' : ''}</div>
             ))}
           </div>
-          {sessions >= 4 && <div style={{ marginTop: '12px', fontSize: '13px', color: '#10b981', fontWeight: 700 }}>🎉 4 sessions done! Take a long break.</div>}
+          {sessions >= 4 && <div style={{ marginTop: '12px', fontSize: '13px', color: '#10b981', fontWeight: 700 }}>🎉 4 ta sessiya tugadi! Uzoqroq dam oling.</div>}
         </div>
-      </div>
-
-      <div className="card" style={{ marginTop: '16px', padding: '18px 20px' }}>
-        <div style={{ fontWeight: 700, fontSize: '14px', marginBottom: '10px' }}>💡 Pomodoro Tips</div>
-        {[
-          'Work fully focused for 25 minutes, then take a 5-minute break.',
-          'After 4 sessions, take a longer 15–30 minute break.',
-          'Remove distractions — silence your phone during work sessions.',
-          'Use breaks to stretch, hydrate, or rest your eyes.',
-        ].map((tip, i) => (
-          <div key={i} style={{ fontSize: '13px', color: '#64748b', padding: '5px 0', borderBottom: i < 3 ? '1px solid #f1f5f9' : 'none' }}>{i + 1}. {tip}</div>
-        ))}
       </div>
     </div>
   );

@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/global.css';
 import DashboardPage from './StudentDashboard Components/Dashboard';
 import DeadlinesPage from './StudentDashboard Components/Deadlines';
 import TasksPage from './StudentDashboard Components/Tasks';
 import PomodoroPage from './StudentDashboard Components/Pomodoro';
-import ProfileSettings from './StudentDashboard Components/ProfileSettings'; // NEW IMPORT
+import ProfileSettings from './StudentDashboard Components/ProfileSettings';
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? 'https://sams-backend-92kz.onrender.com/api';  
 
-/* ── Sidebar nav (Removed Programmes and Notifications) ── */
 const NAV = [
   { id: 'dashboard',     label: 'Dashboard',      icon: '🏠' },
   { id: 'deadlines',     label: 'Deadlines',      icon: '📅' },
@@ -18,6 +17,14 @@ const NAV = [
 
 export default function StudentDashboard({ user, onLogout }) {
   const [activePage, setActivePage] = useState('dashboard');
+  
+  // Real Name State
+  const [realName, setRealName] = useState('');
+
+  // Dark Mode State
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return localStorage.getItem('theme') === 'dark';
+  });
 
   const [assignments, setAssignments] = useState([]);
   const [quizzes, setQuizzes]         = useState([]);
@@ -36,6 +43,39 @@ export default function StudentDashboard({ user, onLogout }) {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
+  // --- 1. Theme Toggle Logic ---
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.add('dark-mode');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.body.classList.remove('dark-mode');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  // --- 2. Fetch Real Name ---
+  useEffect(() => {
+    if (user?.user_id) {
+      fetch(`${API_BASE}/auth/profile/${user.user_id}/`, { headers: authHeaders })
+        .then(async (res) => {
+          if (res.status === 401) {
+            onLogout();
+            return;
+          }
+          if (!res.ok) throw new Error('Failed to fetch profile');
+          return res.json();
+        })
+        .then((data) => {
+          if (data && data.first_name) {
+            setRealName(data.first_name);
+          }
+        })
+        .catch((err) => console.error("Could not load real name:", err));
+    }
+  }, [user?.user_id]); 
+
+  // --- 3. Fetch Deadlines ---
   useEffect(() => {
     setLoadingDeadlines(true);
     setDeadlineError(null);
@@ -45,6 +85,10 @@ export default function StudentDashboard({ user, onLogout }) {
       fetch(`${API_BASE}/quizzes/`, { headers: authHeaders })
     ])
     .then(async ([assignRes, quizRes]) => {
+      if (assignRes.status === 401 || quizRes.status === 401) {
+        onLogout();
+        return;
+      }
       if (!assignRes.ok || !quizRes.ok) throw new Error(`HTTP Error fetching deadlines`);
       const assignData = await assignRes.json();
       const quizData = await quizRes.json();
@@ -56,11 +100,16 @@ export default function StudentDashboard({ user, onLogout }) {
     .finally(() => setLoadingDeadlines(false));
   }, []); 
 
+  // --- 4. Fetch Tasks ---
   useEffect(() => {
     setLoadingTasks(true);
     setTaskError(null);
     fetch(`${API_BASE}/tasks/`, { headers: authHeaders })
       .then((r) => {
+        if (r.status === 401) {
+          onLogout();
+          return;
+        }
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
@@ -76,10 +125,12 @@ export default function StudentDashboard({ user, onLogout }) {
 
   const toggleExpand = (id) => setExpanded((prev) => (prev === id ? null : id));
 
+  // --- 5. Auto-Refresh Tasks ---
   const createTask = async (taskData) => {
     const res  = await fetch(`${API_BASE}/tasks/`, { method: 'POST', headers: authHeaders, body: JSON.stringify(taskData) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const created = await res.json();
+    // Instantly adds the new task to the top of the list without needing to refresh
     setTasks((prev) => [created, ...prev]);
   };
 
@@ -105,11 +156,11 @@ export default function StudentDashboard({ user, onLogout }) {
   };
 
   const PAGE_TITLE = {
-    dashboard:     { title: 'Dashboard',       sub: `Welcome back, ${user?.name?.split(' ')[0] ?? 'Student'}! 👋` },
+    dashboard:     { title: 'Dashboard',       sub: `Welcome back, ${realName || user?.name?.split(' ')[0] || 'Student'}! 👋` },
     deadlines:     { title: 'Deadlines',       sub: 'View your upcoming quizzes and assignments' },
     tasks:         { title: 'My Tasks',        sub: 'Create and manage your personal tasks' },
     pomodoro:      { title: 'Pomodoro Timer',  sub: 'Stay focused, study smarter' },
-    profile:       { title: 'Profile Settings', sub: 'Manage your personal details and subjects' }, // NEW PAGE TITLE
+    profile:       { title: 'Profile Settings', sub: 'Manage your personal details and subjects' }, 
   };
 
   const { title, sub } = PAGE_TITLE[activePage] || PAGE_TITLE['dashboard'];
@@ -118,7 +169,12 @@ export default function StudentDashboard({ user, onLogout }) {
     <div className="app-layout">
       {/* ─── Sidebar ─── */}
       <aside className="sidebar">
-        <div className="sidebar-logo">
+        <div 
+          className="sidebar-logo" 
+          onClick={() => setActivePage('dashboard')} 
+          style={{ cursor: 'pointer' }}
+          title="Go to Dashboard"
+        >
           <div className="logo-icon">📚</div>
           <div>
             <div className="logo-text">SAMS</div>
@@ -141,15 +197,26 @@ export default function StudentDashboard({ user, onLogout }) {
         </nav>
 
         <div className="sidebar-footer">
+          {/* Theme Toggle Button */}
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)} 
+            className="btn btn-outline w-full" 
+            style={{ marginBottom: '12px' }}
+          >
+            {isDarkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
+          </button>
+
           <div className="user-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div className="user-avatar">{user?.name?.[0] ?? 'S'}</div>
+              <div className="user-avatar">{realName?.[0] || user?.name?.[0] || 'S'}</div>
               <div>
-                <div className="user-name">{user?.name?.split(' ')[0] ?? 'Student'}</div>
+                <div className="user-name" style={{ maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {realName || user?.name?.split(' ')[0] || 'Student'}
+                </div>
                 <div className="user-role">Student</div>
               </div>
             </div>
-            {/* NEW SETTINGS GEAR ICON */}
+            
             <button 
               onClick={() => setActivePage('profile')}
               title="Profile Settings"
@@ -175,7 +242,6 @@ export default function StudentDashboard({ user, onLogout }) {
             <h2>{title}</h2>
             <p>{sub}</p>
           </div>
-          {/* Notifications removed from Topbar right */}
           <div className="topbar-right"></div>
         </div>
 
@@ -194,9 +260,8 @@ export default function StudentDashboard({ user, onLogout }) {
 
           {activePage === 'pomodoro' && <PomodoroPage />}
 
-          {/* NEW PROFILE COMPONENT */}
           {activePage === 'profile' && (
-            <ProfileSettings user={user} authHeaders={authHeaders} />
+            <ProfileSettings user={user} authHeaders={authHeaders} onLogout={onLogout} />
           )}
         </div>
       </div>

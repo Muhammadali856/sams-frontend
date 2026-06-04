@@ -434,27 +434,57 @@ tbody tr:hover { background: #f8fafc; }
 /* ─── Pomodoro ────────────────────────────────── */
 .pomodoro-ring {
   display: flex; align-items: center; justify-content: center;
-  margin: 20px auto;
+  margin: 30px auto; 
+  transform: scale(1.1); /* Halqani JSX ga tegmasdan kattalashtirish */
 }
 
-.ring-svg { transform: rotate(-90deg); }
-.ring-bg { fill: none; stroke: var(--border); stroke-width: 8; }
+.ring-svg { 
+  transform: rotate(-90deg); 
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.05)); /* Kichik soya */
+}
+
+.ring-bg { 
+  fill: none; 
+  stroke: var(--border); 
+  stroke-width: 12; /* Halqani qalinroq qilish */
+}
+
 .ring-progress {
   fill: none;
-  stroke: var(--accent);
-  stroke-width: 8;
+  stroke-width: 12; /* Progress chizig'ini qalinroq qilish */
   stroke-linecap: round;
-  transition: stroke-dashoffset 1s linear;
+  transition: stroke-dashoffset 1s linear, stroke 0.3s ease, filter 0.3s ease;
 }
-.ring-work  .ring-progress { stroke: var(--primary); }
-.ring-break .ring-progress { stroke: var(--success); }
+
+/* Yorug' rejim uchun yorqin ranglar */
+.ring-work  .ring-progress { stroke: #3b82f6; } 
+.ring-break .ring-progress { stroke: #10b981; }
 
 .timer-display {
   position: absolute;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-.timer-time { font-size: 36px; font-weight: 800; color: var(--text-dark); }
-.timer-mode { font-size: 12px; font-weight: 700; color: var(--text-light); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.timer-time { 
+  font-size: 44px; 
+  font-weight: 800; 
+  color: var(--text-dark); 
+  letter-spacing: 1px;
+  line-height: 1;
+  transition: color 0.3s ease;
+}
+
+.timer-mode { 
+  font-size: 13px; 
+  font-weight: 800; 
+  color: var(--text-light); 
+  margin-top: 6px; 
+  text-transform: uppercase; 
+  letter-spacing: 0.15em; 
+}
 
 /* ─── Assignment Row ─────────────────────────── */
 .assignment-row {
@@ -715,4 +745,67 @@ tbody tr:hover { background: #f8fafc; }
     max-height: 90vh; 
     overflow-y: auto; 
   }
+}
+
+/* =========================================
+   🌙 DARK MODE GLOBAL OVERRIDES
+   ========================================= */
+body.dark-mode {
+  /* 1. Change Background Colors */
+  --bg:             #0f172a; /* Deep dark blue for the main background */
+  --white:          #1e293b; /* Dark slate for Cards, Topbar, and Modals */
+  
+  /* 2. Change Text Colors to White / Light Gray */
+  --text-dark:      #f8fafc; /* Bright white for main text and titles */
+  --text-mid:       #cbd5e1; /* Light gray for secondary text */
+  --text-light:     #94a3b8; /* Muted slate for subtext */
+  
+  /* 3. Change Borders */
+  --border:         #334155; 
+  
+  /* 4. Soften the Background of Badges so text is readable */
+  --success-bg:     rgba(16, 185, 129, 0.15);
+  --warning-bg:     rgba(245, 158, 11, 0.15);
+  --danger-bg:      rgba(239, 68, 68, 0.15);
+  --info-bg:        rgba(59, 130, 246, 0.15);
+}
+
+/* Make the Dark Mode button highly visible in the sidebar */
+.sidebar-footer .btn-outline {
+  color: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+body.dark-mode .btn-outline:hover {
+  border-color: var(--text-dark);
+  color: var(--text-dark);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Fix table and expanded row backgrounds so they don't turn white */
+body.dark-mode thead tr, 
+body.dark-mode tbody tr:hover,
+body.dark-mode .assignment-row.expanded {
+  background: #0f172a; 
+}
+
+/* Pomodoro Timer Neon Effect */
+body.dark-mode .timer-time { color: #ffffff; text-shadow: 0 2px 10px rgba(255,255,255,0.15); }
+body.dark-mode .timer-mode { color: #94a3b8; }
+body.dark-mode .ring-bg { stroke: #334155; }
+body.dark-mode .ring-work .ring-progress { stroke: #3b82f6; filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.7)); }
+body.dark-mode .ring-break .ring-progress { stroke: #10b981; filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.7)); }
+
+/* ─── INFO BANNER (Fixes "the white thing") ─── */
+.info-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px; padding: 10px 16px;
+  margin-bottom: 16px; font-size: 13px; color: #1e40af;
+}
+
+body.dark-mode .info-banner {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: #3b82f6;
+  color: #e0f2fe;
 }
