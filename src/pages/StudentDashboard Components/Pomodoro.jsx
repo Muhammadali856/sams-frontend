@@ -172,7 +172,7 @@ export default function PomodoroPage() {
               <button className="modal-close" onClick={() => setShowResetConfirm(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <p>Rostdan ham timerni boshidan boshlamoqchimisiz?</p>
+              <p>Do you really want to reset the timer?</p>
             </div>
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setShowResetConfirm(false)}>Cancel</button>
