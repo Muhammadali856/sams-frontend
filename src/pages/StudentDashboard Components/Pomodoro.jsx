@@ -9,13 +9,16 @@ export default function PomodoroPage() {
   const [mode,     setMode]     = useState('work');
   const [sessions, setSessions] = useState(0);
   
-  // NEW: State to track fullscreen status accurately
+  // State to track fullscreen status
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // NEW: State to control the custom reset confirmation modal
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   
   const intervalRef = useRef(null);
   const containerRef = useRef(null); 
 
-  // Listen for fullscreen changes (handles both button clicks and the 'Esc' key)
+  // Listen for fullscreen changes
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -67,13 +70,17 @@ export default function PomodoroPage() {
 
   const toggle = () => setRunning((r) => !r);
   
-  const handleReset = () => {
-    const confirmReset = window.confirm("Rostdan ham timerni boshidan boshlamoqchimisiz?");
-    if (confirmReset) {
-      setRunning(false); 
-      clearInterval(intervalRef.current); 
-      setSeconds(mode === 'work' ? WORK_SEC : BREAK_SEC);
-    }
+  // NEW: Trigger the custom modal instead of window.confirm
+  const handleResetClick = () => {
+    setShowResetConfirm(true);
+  };
+
+  // NEW: The actual reset logic executed when "Yes" is clicked
+  const confirmResetAction = () => {
+    setRunning(false); 
+    clearInterval(intervalRef.current); 
+    setSeconds(mode === 'work' ? WORK_SEC : BREAK_SEC);
+    setShowResetConfirm(false); // Close the modal
   };
 
   const switchMode = (m) => { 
@@ -102,7 +109,6 @@ export default function PomodoroPage() {
     <div ref={containerRef} style={{ 
       maxWidth: isFullscreen ? '100%' : '480px', 
       margin: '0 auto', 
-      // FIXED: Changed '--bg-main' to '--bg' to respect the global.css dark mode variable
       background: isFullscreen ? 'var(--bg)' : 'transparent', 
       height: isFullscreen ? '100vh' : 'auto', 
       display: 'flex', 
@@ -135,7 +141,8 @@ export default function PomodoroPage() {
         </div>
 
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '24px' }}>
-          <button className="btn btn-outline" onClick={handleReset}>↺ Reset</button>
+          {/* Use the new click handler here */}
+          <button className="btn btn-outline" onClick={handleResetClick}>↺ Reset</button>
           <button className={`btn ${running ? 'btn-danger' : 'btn-primary'}`} style={{ minWidth: '100px' }} onClick={toggle}>
             {running ? '⏸ Pause' : '▶ Start'}
           </button>
@@ -155,6 +162,26 @@ export default function PomodoroPage() {
           {sessions >= 4 && <div style={{ marginTop: '12px', fontSize: '13px', color: '#10b981', fontWeight: 700 }}>🎉 4 ta sessiya tugadi! Uzoqroq dam oling.</div>}
         </div>
       </div>
+
+      {/* NEW: Custom Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="modal-overlay" onClick={() => setShowResetConfirm(false)}>
+          <div className="modal" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Reset Timer</h3>
+              <button className="modal-close" onClick={() => setShowResetConfirm(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p>Rostdan ham timerni boshidan boshlamoqchimisiz?</p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setShowResetConfirm(false)}>Cancel</button>
+              <button className="btn btn-danger" onClick={confirmResetAction}>Yes, Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
