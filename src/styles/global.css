@@ -586,38 +586,91 @@ tbody tr:hover { background: #f8fafc; }
 
 
 /* ─── Login Page Specifics ────────────────────────────── */
-.login-page { min-height: 100vh; display: flex; font-family: 'Nunito', sans-serif; }
-.login-left { flex: 1; background: linear-gradient(145deg, #1a2744 0%, #243560 60%, #1a2744 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px; position: relative; overflow: hidden; }
-.login-decor { position: absolute; border-radius: 50%; pointer-events: none; }
-.login-decor.top-right { top: -80px; right: -80px; width: 340px; height: 340px; background: rgba(240,165,0,0.07); }
-.login-decor.bottom-left { bottom: -60px; left: -60px; width: 260px; height: 260px; background: rgba(240,165,0,0.05); }
-.login-logo-box { display: flex; align-items: center; gap: 14px; margin-bottom: 48px; }
-.login-logo-icon { width: 52px; height: 52px; background: var(--accent); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; }
-.login-logo-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: #fff; line-height: 1.2; }
-.login-logo-sub { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
-.login-hero-text { text-align: center; max-width: 360px; }
-.login-hero-h1 { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 700; color: #fff; line-height: 1.2; margin-bottom: 16px; }
-.login-hero-accent { color: var(--accent); }
-.login-hero-para { font-size: 15px; color: rgba(255,255,255,0.55); line-height: 1.7; font-weight: 500; }
-.login-chips { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 32px; }
-.login-chip { display: flex; align-items: center; gap: 6px; padding: 7px 14px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 99px; font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.65); }
-.login-right { width: 460px; display: flex; align-items: center; justify-content: center; padding: 48px 40px; background: var(--bg); }
-.login-form-card { width: 100%; max-width: 380px; padding: 32px; }
-.login-form-head { margin-bottom: 28px; }
-.login-form-h2 { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
-.login-form-sub { font-size: 14px; color: var(--text-light); font-weight: 500; }
-.login-role-toggle { display: flex; background: var(--border); border-radius: 10px; padding: 4px; margin-bottom: 24px; }
-.login-role-btn { flex: 1; padding: 9px; border: none; cursor: pointer; border-radius: 7px; font-size: 14px; font-weight: 700; font-family: 'Nunito', sans-serif; transition: all 0.2s; background: transparent; color: var(--text-mid); }
-.login-role-btn.active { background: var(--primary); color: #fff; box-shadow: 0 2px 8px rgba(26,39,68,0.25); }
-.login-alert { border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
-.login-alert.error { background: var(--danger-bg); border: 1px solid #fca5a5; color: #991b1b; }
-.login-alert.success { background: var(--success-bg); border: 1px solid #86efac; color: #166534; }
-.login-auth-toggle { margin-top: 16px; text-align: center; font-size: 13px; color: var(--text-mid); font-weight: 600; }
-.login-auth-toggle span { color: var(--primary); cursor: pointer; text-decoration: underline; }
-.login-demo-box { margin-top: 20px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
-.login-demo-title { font-size: 11px; font-weight: 700; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
-.login-demo-row { font-size: 12px; color: var(--text-mid); margin-bottom: 3px; display: flex; justify-content: space-between; }
+/* ─── Unified Auth Layouts ────────────────────────────── */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 24px;
+  font-family: 'Nunito', sans-serif;
+}
 
+/* Wide Centered Card (For Login) */
+.auth-split-card {
+  display: flex;
+  width: 100%;
+  max-width: 840px; /* Reduced from 960px to make it smaller */
+  background: var(--white);
+  border-radius: 20px; /* Slightly tighter border radius */
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+/* Left Graphic Panel */
+.auth-cover {
+  flex: 1;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  padding: 40px; /* Reduced padding */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: white;
+  position: relative;
+}
+
+.auth-logo-box { display: flex; align-items: center; gap: 14px; margin-bottom: 40px; }
+.auth-logo-icon { width: 48px; height: 48px; background: var(--accent); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+.auth-logo-title { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; color: #fff; line-height: 1; }
+.auth-logo-sub { font-size: 10px; color: rgba(255,255,255,0.6); font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+
+.auth-hero-h1 { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 700; margin-bottom: 16px; line-height: 1.2; }
+.auth-hero-para { font-size: 15px; color: rgba(255,255,255,0.7); line-height: 1.6; }
+
+/* Right Form Panel */
+.auth-form-wrapper {
+  flex: 1.1; 
+  padding: 40px 48px; 
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Narrow Centered Card (For Forgot Password - "New Page" Feel) */
+.auth-narrow-card {
+  width: 100%;
+  max-width: 460px;
+  background: var(--white);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+  padding: 48px 40px;
+}
+
+.auth-form-head { margin-bottom: 32px; }
+.auth-form-h2 { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; color: var(--text-dark); margin-bottom: 8px; }
+.auth-form-sub { font-size: 14px; color: var(--text-light); line-height: 1.5; }
+
+.auth-alert { border-radius: 8px; padding: 12px 16px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
+.auth-alert.error { background: var(--danger-bg); border: 1px solid #fca5a5; color: #991b1b; }
+.auth-alert.success { background: var(--success-bg); border: 1px solid #86efac; color: #166534; }
+
+.auth-link { background: none; border: none; color: var(--text-mid); font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: underline; transition: color 0.2s; }
+.auth-link:hover { color: var(--primary); }
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+  .auth-split-card { flex-direction: column; }
+  .auth-cover { padding: 40px 24px; text-align: center; }
+  .auth-logo-box { justify-content: center; }
+  .auth-form-wrapper { padding: 32px 24px; }
+  .auth-narrow-card { padding: 32px 24px; }
+}
+
+body.dark-mode .auth-split-card, body.dark-mode .auth-narrow-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+}
 
 /* =========================================
    📱 MOBILE RESPONSIVE DESIGN (NEW)
