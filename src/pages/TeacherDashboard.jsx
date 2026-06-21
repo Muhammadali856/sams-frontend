@@ -11,6 +11,7 @@ import '../styles/global.css';
  * - Unified Assignment/Quiz modal and timeline
  * - Enrollment Key Security for Subjects
  * - Head Teacher Student Management (CRUD)
+ * - Real-time Student Search
  */
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? 'https://sams-backend-92kz.onrender.com/api';
@@ -546,6 +547,9 @@ function StudentsPage({ students, isLoading, user, authHeaders, refreshData }) {
     username: '', first_name: '', last_name: '', email: '', password: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // NEW: Search State
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
 
   const openStudentModal = (student = null) => {
     if (student) {
@@ -610,13 +614,35 @@ function StudentsPage({ students, isLoading, user, authHeaders, refreshData }) {
     }
   };
 
+  // NEW: Filter the students based on the search query (Checks both Campus ID and Name)
+  const filteredStudents = students.filter(s => {
+    if (!studentSearchQuery) return true;
+    
+    const q = studentSearchQuery.toLowerCase();
+    const studentId = (s.user?.username || '').toLowerCase();
+    const firstName = (s.user?.first_name || '').toLowerCase();
+    const lastName = (s.user?.last_name || '').toLowerCase();
+    
+    return studentId.includes(q) || firstName.includes(q) || lastName.includes(q);
+  });
+
   return (
     <>
+      {/* NEW: Search Bar Component */}
+      <div style={{ marginBottom: '18px' }}>
+        <input 
+          className="form-input" 
+          placeholder="🔍 Search by Campus ID, First Name, or Last Name…" 
+          value={studentSearchQuery} 
+          onChange={(e) => setStudentSearchQuery(e.target.value)} 
+        />
+      </div>
+
       <div className="card">
         <div className="card-header">
           <div>
             <span className="card-title">🎓 Enrolled Students</span> 
-            <span className="badge badge-todo" style={{ marginLeft: '8px' }}>{students.length} students</span>
+            <span className="badge badge-todo" style={{ marginLeft: '8px' }}>{filteredStudents.length} students</span>
           </div>
           {user?.is_head_teacher && (
             <button className="btn btn-accent btn-sm" onClick={() => openStudentModal()}>
@@ -637,8 +663,8 @@ function StudentsPage({ students, isLoading, user, authHeaders, refreshData }) {
             </thead>
             <tbody>
               {isLoading ? <tr><td colSpan={4} className="empty-state">Loading students...</td></tr> : 
-               students.length === 0 ? <tr><td colSpan={4} className="empty-state">No students found.</td></tr> :
-               students.map((s, i) => (
+               filteredStudents.length === 0 ? <tr><td colSpan={4} className="empty-state">No students found matching "{studentSearchQuery}".</td></tr> :
+               filteredStudents.map((s, i) => (
                 <tr key={s.id}>
                   <td style={{ color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
                   <td><span style={{ fontWeight: 700 }}>{s.user?.first_name || 'Unknown'}</span></td>
