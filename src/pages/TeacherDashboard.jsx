@@ -10,6 +10,7 @@ import '../styles/global.css';
  * - Student details modal (Real API)
  * - Unified Assignment/Quiz modal and timeline
  * - Enrollment Key Security for Subjects
+ * - Head Teacher Student Management (CRUD)
  */
 
 const API_BASE = import.meta.env?.VITE_API_BASE ?? 'https://sams-backend-92kz.onrender.com/api';
@@ -47,12 +48,12 @@ const getNav = (isHeadTeacher) => [
 export default function TeacherDashboard({ user, onLogout }) {
   const [activePage,   setActivePage]   = useState('dashboard');
   
-  // --- NEW: Dark Mode State ---
+  // --- Dark Mode State ---
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark';
   });
 
-  // --- NEW: Theme Toggle Logic ---
+  // --- Theme Toggle Logic ---
   useEffect(() => {
     if (isDarkMode) {
       document.body.classList.add('dark-mode');
@@ -93,7 +94,6 @@ export default function TeacherDashboard({ user, onLogout }) {
     setIsLoading(true);
     setApiError('');
     try {
-      // FIXED: Added studentRes to the destructuring array
       const [assignRes, subjRes, quizRes, studentRes] = await Promise.all([
         fetch(`${API_BASE}/assignments/`, { headers: authHeaders }),
         fetch(`${API_BASE}/subjects/`, { headers: authHeaders }),
@@ -257,7 +257,7 @@ export default function TeacherDashboard({ user, onLogout }) {
     assignments: { title: 'Assignments',   sub: 'Create and manage academic tasks' },
     quizzes:     { title: 'Quizzes',       sub: 'Create and manage upcoming quizzes' },
     subjects:    { title: 'Subjects',      sub: 'Manage academic subjects' },
-    students:    { title: 'Students',      sub: 'View enrolled students' },
+    students:    { title: 'Students',      sub: 'View and manage enrolled students' },
     manage_staff: { title: 'Manage Staff', sub: 'Register new teaching staff accounts' },
   };
   const { title, sub } = PAGE_TITLE[activePage];
@@ -301,7 +301,7 @@ export default function TeacherDashboard({ user, onLogout }) {
             <div className="user-avatar" style={{ background: '#10b981' }}>{user.name[0]}</div>
             <div>
               <div className="user-name">{user.name}</div>
-              <div className="user-role">Teacher</div>
+              <div className="user-role">{user.is_head_teacher ? 'Head Teacher' : 'Teacher'}</div>
             </div>
           </div>
           <button className="logout-btn" onClick={onLogout}>🚪 Log out</button>
@@ -330,7 +330,7 @@ export default function TeacherDashboard({ user, onLogout }) {
           {activePage === 'assignments' && <TasksListPage type="assignment" items={filteredAssignments} subjects={subjects} search={search} setSearch={setSearch} openEdit={(item) => openEdit(item, 'assignment')} setDeleteConfirm={setDeleteConfirm} isLoading={isLoading} />}
           {activePage === 'quizzes'     && <TasksListPage type="quiz" items={filteredQuizzes} subjects={subjects} search={search} setSearch={setSearch} openEdit={(item) => openEdit(item, 'quiz')} setDeleteConfirm={setDeleteConfirm} isLoading={isLoading} />}
           {activePage === 'subjects'    && <SubjectsPage authHeaders={authHeaders} subjects={subjects} isLoading={isLoading} refreshData={fetchDashboardData} onLogout={onLogout} />}
-          {activePage === 'students'    && <StudentsPage students={students} isLoading={isLoading} />}
+          {activePage === 'students'    && <StudentsPage students={students} isLoading={isLoading} user={user} authHeaders={authHeaders} refreshData={fetchDashboardData} />}
           {activePage === 'manage_staff' && user.is_head_teacher && <ManageStaffPage authHeaders={authHeaders} onLogout={onLogout} />}
         </div>
       </div>
@@ -536,20 +536,105 @@ function TasksListPage({ type, items, subjects, search, setSearch, openEdit, set
 }
 
 /* ── Students Management ── */
-function StudentsPage({ students, isLoading }) {
+function StudentsPage({ students, isLoading, user, authHeaders, refreshData }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
+  
+  // Manage Student States
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [studentForm, setStudentForm] = useState({
+    username: '', first_name: '', last_name: '', email: '', password: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const openStudentModal = (student = null) => {
+    if (student) {
+      setEditingStudent(student);
+      setStudentForm({
+        username: student.user?.username || '',
+        first_name: student.user?.first_name || '',
+        last_name: student.user?.last_name || '',
+        email: student.user?.email || '',
+        password: '' // Leave blank unless head teacher wants to force a reset
+      });
+    } else {
+      setEditingStudent(null);
+      setStudentForm({ username: '', first_name: '', last_name: '', email: '', password: '' });
+    }
+    setShowStudentModal(true);
+  };
+
+  const handleSaveStudent = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    // If editing, use PUT. If new, use POST.
+    const url = editingStudent ? `${API_BASE}/students/${editingStudent.id}/` : `${API_BASE}/students/create/`;
+    const method = editingStudent ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: authHeaders,
+        body: JSON.stringify(studentForm)
+      });
+
+      if (res.ok) {
+        alert(`Student ${editingStudent ? 'updated' : 'created'} successfully!`);
+        setShowStudentModal(false);
+        refreshData(); 
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to save student.');
+      }
+    } catch (err) {
+      alert('Network error.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteStudent = async (id) => {
+    if (!window.confirm("⚠️ WARNING: This will permanently delete the student and ALL their submissions. Proceed?")) return;
+    
+    try {
+      const res = await fetch(`${API_BASE}/students/${id}/`, { method: 'DELETE', headers: authHeaders });
+      if (res.ok) {
+        alert('Student deleted successfully.');
+        refreshData();
+      } else {
+        alert('Failed to delete student.');
+      }
+    } catch (err) {
+      alert('Network error.');
+    }
+  };
 
   return (
     <>
       <div className="card">
         <div className="card-header">
-          <span className="card-title">🎓 Enrolled Students</span> 
-          <span className="badge badge-todo">{students.length} students</span>
+          <div>
+            <span className="card-title">🎓 Enrolled Students</span> 
+            <span className="badge badge-todo" style={{ marginLeft: '8px' }}>{students.length} students</span>
+          </div>
+          {user?.is_head_teacher && (
+            <button className="btn btn-accent btn-sm" onClick={() => openStudentModal()}>
+              + New Student
+            </button>
+          )}
         </div>
         
         <div className="table-wrap">
           <table>
-            <thead><tr><th>#</th><th>First Name</th><th>Student ID</th><th style={{ textAlign: 'center' }}>Details</th></tr></thead>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>First Name</th>
+                <th>Student ID</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
             <tbody>
               {isLoading ? <tr><td colSpan={4} className="empty-state">Loading students...</td></tr> : 
                students.length === 0 ? <tr><td colSpan={4} className="empty-state">No students found.</td></tr> :
@@ -558,8 +643,14 @@ function StudentsPage({ students, isLoading }) {
                   <td style={{ color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
                   <td><span style={{ fontWeight: 700 }}>{s.user?.first_name || 'Unknown'}</span></td>
                   <td style={{ fontFamily: 'monospace' }}>{s.user?.username || 'N/A'}</td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td style={{ textAlign: 'right' }}>
                     <button className="btn btn-outline btn-sm" onClick={() => setSelectedStudent(s)}>View</button>
+                    {user?.is_head_teacher && (
+                      <>
+                        <button className="btn btn-outline btn-sm" style={{ marginLeft: '6px' }} onClick={() => openStudentModal(s)}>✏️ Edit</button>
+                        <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#991b1b', border: 'none', marginLeft: '6px' }} onClick={() => handleDeleteStudent(s.id)}>🗑️</button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -590,6 +681,50 @@ function StudentsPage({ students, isLoading }) {
               </div>
             </div>
             <div className="modal-footer"><button className="btn btn-primary" onClick={() => setSelectedStudent(null)}>Close</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Student Modal */}
+      {showStudentModal && (
+        <div className="modal-overlay" onClick={() => setShowStudentModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">{editingStudent ? '✏️ Edit Student' : '➕ Create Student'}</h3>
+              <button className="modal-close" onClick={() => setShowStudentModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleSaveStudent}>
+                <div className="form-group">
+                  <label className="form-label">Campus ID (Required)</label>
+                  <input className="form-input" required value={studentForm.username} onChange={(e) => setStudentForm({...studentForm, username: e.target.value})} placeholder="e.g. S123456" />
+                </div>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">First Name</label>
+                    <input className="form-input" required value={studentForm.first_name} onChange={(e) => setStudentForm({...studentForm, first_name: e.target.value})} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Last Name</label>
+                    <input className="form-input" required value={studentForm.last_name} onChange={(e) => setStudentForm({...studentForm, last_name: e.target.value})} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email Address</label>
+                  <input className="form-input" type="email" value={studentForm.email} onChange={(e) => setStudentForm({...studentForm, email: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">{editingStudent ? 'Reset Password (Leave blank to keep current)' : 'Default Password (Required)'}</label>
+                  <input className="form-input" type="text" required={!editingStudent} value={studentForm.password} onChange={(e) => setStudentForm({...studentForm, password: e.target.value})} placeholder="e.g. sams123" />
+                  {editingStudent && <small style={{color: 'var(--text-light)', display: 'block', marginTop: '4px'}}>Entering a password here forces the student to change it on their next login.</small>}
+                </div>
+                <div style={{ marginTop: '24px', textAlign: 'right' }}>
+                  <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                    {isSubmitting ? 'Saving...' : (editingStudent ? '💾 Save Changes' : '+ Create Student')}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
