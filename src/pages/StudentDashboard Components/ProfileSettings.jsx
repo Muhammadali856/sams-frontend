@@ -14,7 +14,13 @@ export default function ProfileSettings({ user, authHeaders }) {
   const [enrollTarget, setEnrollTarget] = useState(null);
   const [enrollKey, setEnrollKey] = useState('');
   const [isEnrolling, setIsEnrolling] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
+  
+  // NEW: Change Password States
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdError, setPwdError] = useState(null);
+  const [pwdSuccess, setPwdSuccess] = useState(null);
 
   const studentId = user?.studentId || 'UNKNOWN';
 
@@ -28,160 +34,260 @@ export default function ProfileSettings({ user, authHeaders }) {
       if (!subjectsRes.ok || !profileRes.ok) throw new Error('Failed to load profile data.');
       const subjectsData = await subjectsRes.json();
       const profileJson = await profileRes.json();
-      setAllSubjects(Array.isArray(subjectsData) ? subjectsData : (subjectsData.results ?? []));
+      setAllSubjects(subjectsData);
       setProfileData(profileJson);
+      setLoading(false);
     })
-    .catch((err) => setError(err.message))
-    .finally(() => setLoading(false));
+    .catch(err => {
+      setError(err.message);
+      setLoading(false);
+    });
   };
 
   useEffect(() => {
     fetchProfileData();
-  }, [authHeaders, user.user_id]);
+  }, []);
 
   const handleEnrollSubmit = async () => {
-    if (!enrollKey.trim()) {
-      setMsg({ type: 'error', text: 'Please enter the enrollment key.' });
-      return;
-    }
-    
+    if (!enrollKey.trim()) return;
     setIsEnrolling(true);
+    setError(null);
     setMsg(null);
-    
+
     try {
-      const res = await fetch(`${API_BASE}/subjects/${enrollTarget.id}/enroll/`, {
+      const response = await fetch(`${API_BASE}/subjects/${enrollTarget.id}/enroll/`, {
         method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ enrollment_key: enrollKey }),
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enrollment_key: enrollKey })
       });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.detail || `Failed to enroll.`);
-      
-      setMsg({ type: 'success', text: `Successfully enrolled in ${enrollTarget.name}! 🎉` });
-      setEnrollTarget(null);
-      setEnrollKey('');
-      fetchProfileData(); // Refresh the list to show the new subject
+
+      const data = await response.json();
+      if (response.ok) {
+        setMsg(`Successfully enrolled in ${enrollTarget.name}!`);
+        setEnrollTarget(null);
+        setEnrollKey('');
+        fetchProfileData(); // Refresh the list
+      } else {
+        alert(data.error || 'Failed to enroll.');
+      }
     } catch (err) {
-      setMsg({ type: 'error', text: err.message });
+      alert('Network error during enrollment.');
     } finally {
       setIsEnrolling(false);
     }
   };
 
-  if (loading) return <div className="card"><div className="empty-state"><p>Loading profile...</p></div></div>;
+  const handleDropSubject = async (subjectId) => {
+    if (!window.confirm("Are you sure you want to drop this subject?")) return;
+    
+    const currentSubjectIds = profileData.subjects.filter(id => id !== subjectId);
+    
+    try {
+      const response = await fetch(`${API_BASE}/auth/profile/${user.user_id}/`, {
+        method: 'PATCH',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject_ids: currentSubjectIds })
+      });
+      if (response.ok) {
+        fetchProfileData();
+      } else {
+        const data = await response.json();
+        alert(data.error || "Failed to drop subject.");
+      }
+    } catch (err) {
+      alert("Network error.");
+    }
+  };
+
+  // NEW: Handle Password Change logic
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    setPwdError(null);
+    setPwdSuccess(null);
+
+    if (newPassword !== confirmPassword) {
+      setPwdError("Passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPwdError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    setPwdLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/auth/change-password/`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ new_password: newPassword })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setPwdSuccess("Your password has been updated successfully!");
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        setPwdError(data.new_password?.[0] || data.error || "Failed to update password.");
+      }
+    } catch (err) {
+      setPwdError("Network error. Please try again.");
+    } finally {
+      setPwdLoading(false);
+    }
+  };
+
+  if (loading) return <div className="card"><div className="empty-state"><p>Loading profile data…</p></div></div>;
   if (error) return <div className="card"><div className="empty-state"><div className="empty-icon">⚠️</div><p style={{ color: '#ef4444' }}>{error}</p></div></div>;
 
-  const enrolledIds = profileData?.subjects || [];
-
   return (
-    <div style={{ width: '100%', maxWidth: '1400px' }}>
+    <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      {/* Read-Only Profile Details */}
-      <div className="card mb-6">
-        <div className="card-header">
-          <span className="card-title">👤 Personal Details</span>
+      {msg && (
+        <div style={{ background: '#ecfdf5', color: '#065f46', padding: '12px 16px', borderRadius: '8px', border: '1px solid #a7f3d0', fontWeight: 600, fontSize: '14px' }}>
+          ✅ {msg}
         </div>
-        <div className="card-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div>
-            <div className="form-label">Full Name</div>
-            <div style={{ fontSize: '15px', fontWeight: 700 }}>
-              {profileData?.first_name} {profileData?.last_name}
+      )}
+
+      {/* ─── 1. Personal Details Card ─── */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">👤 Personal Details</h3>
+        </div>
+        <div className="card-body">
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">Full Name</label>
+              <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', color: '#64748b', fontSize: '14px', fontWeight: 600 }}>
+                {profileData.first_name} {profileData.last_name || ''}
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="form-label">Student ID</div>
-            <div style={{ fontSize: '15px', fontFamily: 'monospace' }}>
-              {studentId}
+            <div className="form-group">
+              <label className="form-label">Campus ID</label>
+              <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', color: '#64748b', fontSize: '14px', fontWeight: 600 }}>
+                {studentId}
+              </div>
+            </div>
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label className="form-label">Registered Email</label>
+              <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0', color: '#64748b', fontSize: '14px', fontWeight: 600 }}>
+                {profileData.email}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {msg && <div className={`login-alert ${msg.type === 'error' ? 'error' : 'success'}`} style={{ marginBottom: '16px' }}>{msg.text}</div>}
-
-      {/* Available Subjects List */}
-      <div className="card mb-6">
+      {/* ─── NEW: Security Settings Card ─── */}
+      <div className="card">
         <div className="card-header">
-          <span className="card-title">📚 Course Registration</span>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: enrolledIds.length >= 6 ? 'var(--danger)' : 'var(--text-light)' }}>
-            {enrolledIds.length} / 6 Enrolled
+          <h3 className="card-title">🔐 Security Settings</h3>
+        </div>
+        <div className="card-body">
+          <form onSubmit={handlePasswordChange}>
+            {pwdError && <div style={{ marginBottom: '16px', padding: '10px', background: '#fee2e2', color: '#991b1b', borderRadius: '6px', fontSize: '13px', fontWeight: 600 }}>⚠️ {pwdError}</div>}
+            {pwdSuccess && <div style={{ marginBottom: '16px', padding: '10px', background: '#ecfdf5', color: '#065f46', borderRadius: '6px', fontSize: '13px', fontWeight: 600 }}>✅ {pwdSuccess}</div>}
+            
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">New Password</label>
+                <input 
+                  type="password" 
+                  className="form-input" 
+                  placeholder="Min. 8 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Confirm New Password</label>
+                <input 
+                  type="password" 
+                  className="form-input" 
+                  placeholder="Repeat new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <button type="submit" className="btn btn-primary" disabled={pwdLoading || !newPassword}>
+                {pwdLoading ? 'Updating...' : 'Update Password'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* ─── 2. Academic Programmes Card ─── */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">📚 Academic Programmes</h3>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: profileData.subjects.length >= 6 ? '#ef4444' : '#64748b' }}>
+            {profileData.subjects.length} / 6 Enrolled
           </span>
         </div>
-        
-        <div style={{ padding: '12px 20px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe', fontSize: '13px', color: '#1e40af' }}>
-          To enroll in a new subject, click <strong>Enroll</strong> and enter the secret key provided by your teacher.
-        </div>
-
-        <div className="card-body" style={{ padding: '12px' }}>
-          {allSubjects.map(subject => {
-              const isEnrolled = enrolledIds.includes(subject.id);
-              const isExpanded = expandedId === subject.id; // Check if this one is open
-
-              return (
-                <div key={subject.id} className="assignment-row" style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '8px', padding: '14px 16px' }}>
-                  
-                  {/* TOP ROW: Title & Buttons */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    <div className="assignment-title" style={{ color: 'var(--text-dark)' }}>
-                      {subject.name}
+        <div className="card-body">
+          <div style={{ marginBottom: '20px' }}>
+            {profileData.subjects.length === 0 ? (
+               <div style={{ padding: '20px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', color: '#64748b', fontSize: '13px', fontWeight: 600 }}>
+                 You are not enrolled in any subjects yet.
+               </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {profileData.subjects.map((subId, index) => {
+                  const subjectName = profileData.subject_names[index];
+                  return (
+                    <div key={subId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--primary)' }}>{subjectName}</span>
+                      <button 
+                        onClick={() => handleDropSubject(subId)}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', fontWeight: 700, cursor: 'pointer', padding: '4px 8px', borderRadius: '4px' }}
+                        onMouseEnter={(e) => e.target.style.background = '#fee2e2'}
+                        onMouseLeave={(e) => e.target.style.background = 'none'}
+                      >
+                        Drop
+                      </button>
                     </div>
-                    
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      {/* DETAILS BUTTON */}
-                      {subject.description && (
-                        <button 
-                          className="btn btn-outline btn-sm" 
-                          onClick={() => setExpandedId(isExpanded ? null : subject.id)}
-                          style={{ padding: '4px 10px', fontSize: '12px' }}
-                        >
-                          {isExpanded ? 'Hide Details' : '📄 Details'}
-                        </button>
-                      )}
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
-                      {/* ENROLL / STATUS BUTTON */}
-                      {isEnrolled ? (
-                        <span style={{ background: '#d1fae5', color: '#065f46', padding: '6px 12px', borderRadius: '99px', fontSize: '12px', fontWeight: 700 }}>
-                          ✅ Enrolled
-                        </span>
-                      ) : (
-                        <button 
-                          className="btn btn-outline btn-sm" 
-                          onClick={() => { setEnrollTarget(subject); setEnrollKey(''); setMsg(null); }}
-                          disabled={enrolledIds.length >= 6}
-                        >
-                          🔐 Enroll
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* BOTTOM ROW: Expandable Description */}
-                  {isExpanded && subject.description && (
-                    <div style={{ 
-                      fontSize: '13px', 
-                      color: 'var(--text-mid)', 
-                      background: '#f8fafc', 
-                      padding: '12px 14px', 
-                      borderRadius: '6px',
-                      borderLeft: '3px solid #3b82f6',
-                      marginTop: '4px'
-                    }}>
-                      {subject.description}
-                    </div>
-                  )}
-
+          <h4 style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: '0.05em', marginBottom: '12px' }}>Available Subjects</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {allSubjects.filter(s => !profileData.subjects.includes(s.id)).map(sub => (
+              <div key={sub.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'var(--white)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-dark)' }}>{sub.name}</div>
+                  {sub.description && <div style={{ fontSize: '12px', color: 'var(--text-light)', marginTop: '2px' }}>{sub.description}</div>}
                 </div>
-              );
-            })
-          }
+                <button 
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setEnrollTarget(sub)}
+                  disabled={profileData.subjects.length >= 6}
+                >
+                  Enroll
+                </button>
+              </div>
+            ))}
+            {allSubjects.filter(s => !profileData.subjects.includes(s.id)).length === 0 && (
+              <div style={{ fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' }}>No more subjects available.</div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Enrollment Security Modal */}
+      {/* ─── Enrollment Key Modal ─── */}
       {enrollTarget && (
         <div className="modal-overlay" onClick={() => setEnrollTarget(null)}>
-          <div className="modal" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-title">🔐 Enter Enrollment Key</h3>
               <button className="modal-close" onClick={() => setEnrollTarget(null)}>✕</button>
